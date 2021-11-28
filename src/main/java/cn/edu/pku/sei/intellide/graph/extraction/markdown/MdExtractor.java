@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
 
 public class MdExtractor extends KnowledgeExtractor {
 
-    public static final Label MarkdownSection = Label.label("MarkdownSection");
+    public static final Label MARKDOWN = Label.label("MarkdownSection");
     public static final RelationshipType SUB_MD_ELEMENT = RelationshipType.withName("subMdElement");
     public static final RelationshipType PARENT = RelationshipType.withName("parent");
     public static final String TITLE = "title";
@@ -84,7 +84,8 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void parseMd(BufferedReader in, Map<String, MdSection> map) throws IOException {
         String title = in.readLine();
-        root = title.substring(2, title.indexOf("<"));
+        if(title.contains("<")) root = title.substring(2, title.indexOf("<"));
+        else root = title.substring(2);
         Entities.get(1).title = root;
         Entities.get(1).level = 1;
         String line = "";
@@ -159,7 +160,7 @@ public class MdExtractor extends KnowledgeExtractor {
     public void parseCodeBlock(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
         while((line = in.readLine()) != null) {
             if(line.equals("```")) break;
-            Entities.get(curLevel).codeBlock += line;
+            Entities.get(curLevel).codeBlock += line + "\n";
         }
     }
 
@@ -204,14 +205,14 @@ public class MdExtractor extends KnowledgeExtractor {
             map.put(MdExtractor.CONTENT, content.toString());
             map.put(MdExtractor.CODEBLOCK, codeBlock);
             map.put(MdExtractor.TABLE, table.toString());
-            node = inserter.createNode(map, new Label[] {MdExtractor.MarkdownSection});
+            node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
             for (int i = 0; i < children.size(); i++) {
                 MdSection child = children.get(i);
                 if(child.level == -1) continue;
                 long childId = child.toNeo4j(inserter);
                 Map<String, Object> rMap = new HashMap<>();
                 rMap.put(MdExtractor.SERIAL, i);
-               inserter.createRelationship(node, childId, MdExtractor.SUB_MD_ELEMENT, rMap);
+                inserter.createRelationship(node, childId, MdExtractor.SUB_MD_ELEMENT, rMap);
             }
             return node;
         }
