@@ -52,24 +52,25 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
             fileName = fileName.substring(0, fileName.lastIndexOf("."));
 
-            if(!fileName.contains("shell-net-ntpdate")) continue;
+            System.out.println(fileName);
 
             try {
-                BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"GBK"));
+                BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"utf8"));
                 parseMd(in, map);
             } catch (FileNotFoundException e) {
                 e.printStackTrace();
             } catch (IOException e) {
                 e.printStackTrace();
             }
-        }
-        map.put(Entities.get(1).title, Entities.get(1));
-        for (MdSection mdSection: map.values()) {
-            System.out.println("title: " + mdSection.title);
-            System.out.println("content: " + mdSection.content);
-            System.out.println("codeblock: " + mdSection.codeBlock);
-            System.out.println("table: " + mdSection.table);
-//            mdSection.toNeo4j(this.getInserter());
+            for(int i = 1;i <= 3;i++) {
+                if(Entities.get(i) != null & !map.containsKey(Entities.get(i).title)) {
+                    map.put(Entities.get(i).title, Entities.get(i));
+                    if(i > 1) Entities.get(i-1).children.add(Entities.get(i));
+                }
+            }
+            for (MdSection mdSection: map.values()) {
+                if(mdSection.level != -1) mdSection.toNeo4j(this.getInserter());
+            }
         }
     }
 
@@ -90,7 +91,6 @@ public class MdExtractor extends KnowledgeExtractor {
         while ((line = in.readLine()) != null) {
             // 跳过不考虑处理的文本
             if(TextFilter(line)) continue;
-            // 根据文本类型转到相应的处理函数
             TypeDispatch(line, in, map);
         }
     }
@@ -99,6 +99,9 @@ public class MdExtractor extends KnowledgeExtractor {
         return (line.equals("") || line.contains("-   ") || line.contains("**图") || line.contains("![]"));
     }
 
+    /**
+     * 根据文本类型转到相应的处理函数
+     */
     public boolean TypeDispatch(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
         boolean flag = false;
         if(line.contains("# ")) {
@@ -135,7 +138,7 @@ public class MdExtractor extends KnowledgeExtractor {
         ArrayList<JSONArray> tb = new ArrayList<>();
         JSONArray ja = new JSONArray();
         while((line = in.readLine()) != null) {
-            if(Pattern.matches(line, pattern)) {
+            if(Pattern.matches(pattern, line)) {
                 ja.put(line.substring(line.lastIndexOf("</a>") + 4, line.lastIndexOf("</p>")));
             }
             else if(line.contains("</tr>")) {
@@ -155,8 +158,7 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void parseCodeBlock(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
         while((line = in.readLine()) != null) {
-            if(line.equals("```")) return;
-            if(TextFilter(line)) continue;
+            if(line.equals("```")) break;
             Entities.get(curLevel).codeBlock += line;
         }
     }
@@ -188,8 +190,8 @@ public class MdExtractor extends KnowledgeExtractor {
         String title = "";
         int level = -1;
         int serial = 0;
-        String content;
-        String codeBlock;
+        String content = "";
+        String codeBlock = "";
         JSONObject table = new JSONObject(new LinkedHashMap<>());
         ArrayList<MdSection> children = new ArrayList<>();
 
