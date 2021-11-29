@@ -53,7 +53,7 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-//            if(!fileName.contains("debug-memory.md")) continue;
+            if(!fileName.contains("apx-dll.md")) continue;
             System.out.println(fileName);
 
             try {
@@ -147,7 +147,7 @@ public class MdExtractor extends KnowledgeExtractor {
         if(line.contains("# ")) {
             parseTitle(line, in, map); flag = true;
         }
-        else if(line.contains("**表")) {
+        else if(line.contains("**表") || line.contains("=\"table")) {
             parseTable(line, in, map); flag = true;
         }
         else if(line.equals("```")) {
@@ -173,16 +173,17 @@ public class MdExtractor extends KnowledgeExtractor {
     }
 
     public void parseTable(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
-        tbName = line.substring(line.lastIndexOf(" "));
-        String pattern1 = ".*</a><span>.*</span></p>.*";
+        if(line.contains("** 表")) tbName = line.substring(line.lastIndexOf(" "));
+        else tbName = "table";
+        String pattern1 = ".*</a><span>.*</span>(</strong>)?</p>.*";
         String pattern2 = ".*</a>.*</p>.*";
         ArrayList<JSONArray> tb = new ArrayList<>();
         JSONArray ja = new JSONArray();
         while((line = in.readLine()) != null) {
             if(Pattern.matches(pattern1, line) || Pattern.matches(pattern2, line)) {
-                line.replaceAll("<span>", "");
-                line.replaceAll("</span>", "");
-                line.replaceAll("</strong>", "");
+                line = line.replace("<span>", "");
+                line = line.replace("</span>", "");
+                line = line.replace("</strong>", "");
                 ja.put(line.substring(line.lastIndexOf("</a>") + 4, line.lastIndexOf("</p>")));
             }
             else if(line.contains("</tr>")) {
