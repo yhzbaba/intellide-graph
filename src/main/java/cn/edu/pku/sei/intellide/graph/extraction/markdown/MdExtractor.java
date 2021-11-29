@@ -18,13 +18,13 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public static final Label MARKDOWN = Label.label("MarkdownSection");
     public static final RelationshipType SUB_MD_ELEMENT = RelationshipType.withName("subMdElement");
-    public static final RelationshipType PARENT = RelationshipType.withName("parent");
     public static final String TITLE = "title";
     public static final String CONTENT = "content";
     public static final String CODEBLOCK = "codeblock";
     public static final String TABLE = "table";
     public static final String LEVEL = "level";
     public static final String SERIAL = "serial";
+    public static final String LINKDOCS = "linkdocs";
 
     private int curLevel;
     private String root;    // 作为文件的标识
@@ -45,29 +45,36 @@ public class MdExtractor extends KnowledgeExtractor {
 
     @Override
     public void extraction() {
-        Map<String, MdSection> map = new HashMap<>();
+
         for (File file : FileUtils.listFiles(new File(this.getDataDir()), new String[] { "md" }, true)) {
             Init();
+            Map<String, MdSection> map = new HashMap<>();
             String fileName = file.getAbsolutePath().substring(new File(this.getDataDir()).getAbsolutePath().length())
                     .replaceAll("^[/\\\\]+", "");
-            fileName = fileName.substring(0, fileName.lastIndexOf("."));
 
+//            fileName = fileName.substring(0, fileName.lastIndexOf("."));
+//            if(!fileName.contains("debug-memory.md")) continue;
             System.out.println(fileName);
 
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"utf8"));
-                parseMd(in, map);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
+                if(isCatalogDoc(file)) {
+                    parseCatalog(in);
+                    map.put(Entities.get(1).title, Entities.get(1));
+                }
+                else {
+                    parseMd(in, map);
+                    for(int i = 1;i <= 3;i++) {
+                        if(Entities.get(i) != null & !map.containsKey(Entities.get(i).title)) {
+                            map.put(Entities.get(i).title, Entities.get(i));
+                            if(i > 1) Entities.get(i-1).children.add(Entities.get(i));
+                        }
+                    }
+                }
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            for(int i = 1;i <= 3;i++) {
-                if(Entities.get(i) != null & !map.containsKey(Entities.get(i).title)) {
-                    map.put(Entities.get(i).title, Entities.get(i));
-                    if(i > 1) Entities.get(i-1).children.add(Entities.get(i));
-                }
-            }
+
             for (MdSection mdSection: map.values()) {
                 if(mdSection.level != -1) mdSection.toNeo4j(this.getInserter());
             }
@@ -82,12 +89,44 @@ public class MdExtractor extends KnowledgeExtractor {
         }
     }
 
+    /**
+     * 判断文档是否是目录索引
+     */
+    public boolean isCatalogDoc(File file) {
+        Long fileLengthLong = file.length();
+        byte[] fileContent = new byte[fileLengthLong.intValue()];
+        FileInputStream inputStream = null;
+        try {
+            inputStream = new FileInputStream(file);
+            inputStream.read(fileContent);
+            inputStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        String content = new String(fileContent);
+        if(content.contains(".md)**")) return true;
+        return false;
+    }
+
+    public void parseCatalog(BufferedReader in) throws IOException {
+        setTitle(in);
+        String line = in.readLine();
+        while((line = in.readLine()) != null) {
+            if((line.equals("") || line.contains("**图") || line.contains("![]"))) continue;
+            if(line.contains(".md)**")) {
+                // 跳转链接
+                String linkDoc = line.substring(line.indexOf("[") + 1, line.indexOf("]"));
+                Entities.get(1).linkDocs.add(linkDoc);
+            }
+            else {
+                // 普通文本
+                Entities.get(1).content += (line + "\n");
+            }
+        }
+    }
+
     public void parseMd(BufferedReader in, Map<String, MdSection> map) throws IOException {
-        String title = in.readLine();
-        if(title.contains("<")) root = title.substring(2, title.indexOf("<"));
-        else root = title.substring(2);
-        Entities.get(1).title = root;
-        Entities.get(1).level = 1;
+        setTitle(in);
         String line = "";
         while ((line = in.readLine()) != null) {
             // 跳过不考虑处理的文本
@@ -135,11 +174,15 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void parseTable(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
         tbName = line.substring(line.lastIndexOf(" "));
-        String pattern = ".*</a>.*</p>.*";
+        String pattern1 = ".*</a><span>.*</span></p>.*";
+        String pattern2 = ".*</a>.*</p>.*";
         ArrayList<JSONArray> tb = new ArrayList<>();
         JSONArray ja = new JSONArray();
         while((line = in.readLine()) != null) {
-            if(Pattern.matches(pattern, line)) {
+            if(Pattern.matches(pattern1, line) || Pattern.matches(pattern2, line)) {
+                line.replaceAll("<span>", "");
+                line.replaceAll("</span>", "");
+                line.replaceAll("</strong>", "");
                 ja.put(line.substring(line.lastIndexOf("</a>") + 4, line.lastIndexOf("</p>")));
             }
             else if(line.contains("</tr>")) {
@@ -167,7 +210,7 @@ public class MdExtractor extends KnowledgeExtractor {
     public void parseTitleContent(int level, String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
         curLevel = level;
         Entities.set(level, new MdSection());
-        Entities.get(level).title = root + "-" + line.substring(level+1, line.indexOf("<"));
+        Entities.get(level).title = line.substring(level+1, line.indexOf("<"));
         Entities.get(level).level = curLevel;
         String text = "";
         while((text = in.readLine()) != null) {
@@ -186,25 +229,33 @@ public class MdExtractor extends KnowledgeExtractor {
         }
     }
 
+    public void setTitle(BufferedReader in) throws IOException {
+        String title = in.readLine();
+        if(title.contains("<")) root = title.substring(2, title.indexOf("<"));
+        else root = title.substring(2);
+        Entities.get(1).title = root;
+        Entities.get(1).level = 1;
+    }
+
     class MdSection {
         long node = -1;
         String title = "";
         int level = -1;
-        int serial = 0;
         String content = "";
         String codeBlock = "";
         JSONObject table = new JSONObject(new LinkedHashMap<>());
         ArrayList<MdSection> children = new ArrayList<>();
+        ArrayList<String> linkDocs = new ArrayList<>();
 
         public long toNeo4j(BatchInserter inserter) {
             if(node != -1) return node;
             Map<String, Object> map = new HashMap<>();
             map.put(MdExtractor.TITLE, title);
             map.put(MdExtractor.LEVEL, level);
-            map.put(MdExtractor.SERIAL, serial);
             map.put(MdExtractor.CONTENT, content.toString());
             map.put(MdExtractor.CODEBLOCK, codeBlock);
             map.put(MdExtractor.TABLE, table.toString());
+            map.put(MdExtractor.LINKDOCS, linkDocs.toString());
             node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
             for (int i = 0; i < children.size(); i++) {
                 MdSection child = children.get(i);
