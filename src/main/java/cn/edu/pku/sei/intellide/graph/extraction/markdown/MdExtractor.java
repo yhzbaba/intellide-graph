@@ -5,6 +5,7 @@ import org.apache.commons.io.FileUtils;
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.neo4j.cypher.internal.frontend.v2_3.ast.functions.E;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
@@ -17,8 +18,11 @@ import java.util.regex.Pattern;
 public class MdExtractor extends KnowledgeExtractor {
 
     public static final Label MARKDOWN = Label.label("MarkdownSection");
+    public static final Label MARKDOWNCATA = Label.label("MarkdownCatalog");
     public static final RelationshipType SUB_MD_ELEMENT = RelationshipType.withName("subMdElement");
+    // node attributes
     public static final String TITLE = "title";
+    public static final String ISCATALOG = "iscatalog";
     public static final String CONTENT = "content";
     public static final String CODEBLOCK = "codeblock";
     public static final String TABLE = "table";
@@ -27,7 +31,6 @@ public class MdExtractor extends KnowledgeExtractor {
     public static final String LINKDOCS = "linkdocs";
 
     private int curLevel;
-    private String root;    // 作为文件的标识
     private String tbName;
     ArrayList<MdSection> Entities;
 
@@ -53,8 +56,8 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-            if(!fileName.contains("apx-dll.md")) continue;
-            System.out.println(fileName);
+//            if(!fileName.contains("apx-dll.md")) continue;
+//            System.out.println(fileName);
 
             try {
                 BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"utf8"));
@@ -110,6 +113,7 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void parseCatalog(BufferedReader in) throws IOException {
         setTitle(in);
+        Entities.get(1).isCatalog = true;
         String line = in.readLine();
         while((line = in.readLine()) != null) {
             if((line.equals("") || line.contains("**图") || line.contains("![]"))) continue;
@@ -232,9 +236,9 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void setTitle(BufferedReader in) throws IOException {
         String title = in.readLine();
-        if(title.contains("<")) root = title.substring(2, title.indexOf("<"));
-        else root = title.substring(2);
-        Entities.get(1).title = root;
+        if(title.contains("<")) title = title.substring(2, title.indexOf("<"));
+        else title = title.substring(2);
+        Entities.get(1).title = title;
         Entities.get(1).level = 1;
     }
 
@@ -242,6 +246,7 @@ public class MdExtractor extends KnowledgeExtractor {
         long node = -1;
         String title = "";
         int level = -1;
+        boolean isCatalog = false;
         String content = "";
         String codeBlock = "";
         JSONObject table = new JSONObject(new LinkedHashMap<>());
@@ -252,12 +257,14 @@ public class MdExtractor extends KnowledgeExtractor {
             if(node != -1) return node;
             Map<String, Object> map = new HashMap<>();
             map.put(MdExtractor.TITLE, title);
+            map.put(MdExtractor.ISCATALOG, isCatalog);
             map.put(MdExtractor.LEVEL, level);
             map.put(MdExtractor.CONTENT, content.toString());
             map.put(MdExtractor.CODEBLOCK, codeBlock);
             map.put(MdExtractor.TABLE, table.toString());
             map.put(MdExtractor.LINKDOCS, linkDocs.toString());
-            node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
+            if(!isCatalog) node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
+            else node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWNCATA});
             for (int i = 0; i < children.size(); i++) {
                 MdSection child = children.get(i);
                 if(child.level == -1) continue;
