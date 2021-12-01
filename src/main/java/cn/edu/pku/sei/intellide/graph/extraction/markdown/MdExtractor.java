@@ -17,12 +17,14 @@ import java.util.regex.Pattern;
 
 public class MdExtractor extends KnowledgeExtractor {
 
-    public static final Label MARKDOWN = Label.label("MarkdownSection");
-    public static final Label MARKDOWNCATA = Label.label("MarkdownCatalog");
+    public static final Label MARKDOWN = Label.label("Markdown");
+    public static final Label MARKDOWNSECTION = Label.label("MarkdownSection");
+    public static final Label MARKDOWNCATALOG = Label.label("MarkdownCatalog");
     public static final RelationshipType SUB_MD_ELEMENT = RelationshipType.withName("subMdElement");
     // node attributes
     public static final String TITLE = "title";
     public static final String ISCATALOG = "iscatalog";
+    public static final String ISSECTION = "issection";
     public static final String CONTENT = "content";
     public static final String CODEBLOCK = "codeblock";
     public static final String TABLE = "table";
@@ -63,7 +65,8 @@ public class MdExtractor extends KnowledgeExtractor {
                 BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"utf8"));
                 if(isCatalogDoc(file)) {
                     parseCatalog(in);
-                    map.put(Entities.get(1).title, Entities.get(1));
+                    if(Entities.get(1) != null & !map.containsKey(Entities.get(1).title))
+                        map.put(Entities.get(1).title, Entities.get(1));
                 }
                 else {
                     parseMd(in, map);
@@ -114,6 +117,7 @@ public class MdExtractor extends KnowledgeExtractor {
     public void parseCatalog(BufferedReader in) throws IOException {
         setTitle(in);
         Entities.get(1).isCatalog = true;
+        Entities.get(1).isSection = false;
         String line = in.readLine();
         while((line = in.readLine()) != null) {
             if((line.equals("") || line.contains("**图") || line.contains("![]"))) continue;
@@ -240,6 +244,7 @@ public class MdExtractor extends KnowledgeExtractor {
         else title = title.substring(2);
         Entities.get(1).title = title;
         Entities.get(1).level = 1;
+        Entities.get(1).isSection = false;
     }
 
     class MdSection {
@@ -247,6 +252,7 @@ public class MdExtractor extends KnowledgeExtractor {
         String title = "";
         int level = -1;
         boolean isCatalog = false;
+        boolean isSection = true;
         String content = "";
         String codeBlock = "";
         JSONObject table = new JSONObject(new LinkedHashMap<>());
@@ -258,13 +264,15 @@ public class MdExtractor extends KnowledgeExtractor {
             Map<String, Object> map = new HashMap<>();
             map.put(MdExtractor.TITLE, title);
             map.put(MdExtractor.ISCATALOG, isCatalog);
+            map.put(MdExtractor.ISSECTION, isSection);
             map.put(MdExtractor.LEVEL, level);
             map.put(MdExtractor.CONTENT, content.toString());
             map.put(MdExtractor.CODEBLOCK, codeBlock);
             map.put(MdExtractor.TABLE, table.toString());
             map.put(MdExtractor.LINKDOCS, linkDocs.toString());
-            if(!isCatalog) node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
-            else node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWNCATA});
+            if(isCatalog) node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWNCATALOG});
+            else if(isSection) node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWNSECTION});
+            else node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWN});
             for (int i = 0; i < children.size(); i++) {
                 MdSection child = children.get(i);
                 if(child.level == -1) continue;
