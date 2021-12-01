@@ -20,8 +20,12 @@ public class MdLinkExtractor extends KnowledgeExtractor {
 
     @Override
     public void extraction() {
-        Map<Long, List<String>> Catalog = getNodeDocs();
-        Map<Long, String> Md = getNodeTitle();
+        // 访问数据库获取结点对应属性以进行匹配
+        Map<Long, List<String>> Catalog = getCatalogDocs();             // 目录文档及文件索引
+        Map<Long, String> CatalogTitle = getNodeTitle(MARKDOWNCATALOG); // 目录文档标题
+        Map<Long, String> Md = getNodeTitle(MARKDOWN);                  // 普通文档标题
+        // 创建关联
+        createRelationships(addRelationships(Catalog, CatalogTitle));
         createRelationships(addRelationships(Catalog, Md));
     }
 
@@ -43,7 +47,7 @@ public class MdLinkExtractor extends KnowledgeExtractor {
         }
     }
 
-    public Map<Long, List<String>> getNodeDocs() {
+    public Map<Long, List<String>> getCatalogDocs() {
         Map<Long, List<String>> docsMap = new LinkedHashMap<>();
         GraphDatabaseService db = this.getDb();
 
@@ -65,18 +69,17 @@ public class MdLinkExtractor extends KnowledgeExtractor {
         return docsMap;
     }
 
-    public Map<Long, String> getNodeTitle() {
+    public Map<Long, String> getNodeTitle(Label label) {
         Map<Long, String> titleMap = new LinkedHashMap<Long, String>();
         GraphDatabaseService db = this.getDb();
 
         try (Transaction tx = db.beginTx()) {
-            ResourceIterator<Node> nodes = db.findNodes(MARKDOWN);
+            ResourceIterator<Node> nodes = null;
+            if(label.equals(MARKDOWN)) nodes = db.findNodes(MARKDOWN);
+            else if(label.equals(MARKDOWNCATALOG)) nodes = db.findNodes(MARKDOWNCATALOG);
             while (nodes.hasNext()) {
                 Node node = nodes.next();
                 long id = node.getId();
-                // 只需要考虑文档标题
-                int level = (int) node.getProperty(LEVEL);
-                if(level != 1) continue;
                 String title = (String) node.getProperty(TITLE);
                 if (!title.equals("")) {
                     titleMap.put(id, title);
@@ -90,20 +93,20 @@ public class MdLinkExtractor extends KnowledgeExtractor {
     }
 
     /**
-     * 将目录索引与 md 文件的标题属性对比，匹配则记录表示关联
+     * 将标题属性对比，匹配则记录表示关联
      */
     public Map<Long, List<Long>> addRelationships(Map<Long, List<String>> catalog, Map<Long, String> md) {
         Map<Long, List<Long>> nodePairs = new HashMap<>();
         for(Map.Entry<Long, List<String>> entry: catalog.entrySet()) {
             Long id = entry.getKey();
-            nodePairs.put(id, new ArrayList<>());
+            if(!nodePairs.containsKey(id))
+                nodePairs.put(id, new ArrayList<>());
             List<String> docs = entry.getValue();
             for(String doc: docs) {
-                Map<Long, Long> nodePair = new HashMap<>();
                 for (Map.Entry<Long, String> entry2 : md.entrySet()) {
                     Long id2 = entry2.getKey();
                     String title = entry2.getValue();
-                    if(doc.equals(title)) {
+                    if(doc.equals(title) && !nodePairs.get(id).contains(id2)) {
                         nodePairs.get(id).add(id2); break;
                     }
                 }
