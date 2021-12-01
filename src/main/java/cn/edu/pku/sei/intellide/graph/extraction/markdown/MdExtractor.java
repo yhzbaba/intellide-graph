@@ -58,7 +58,7 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-//            if(!fileName.contains("apx-dll.md")) continue;
+            if(!fileName.contains("cmd-pmm.md")) continue;
 //            System.out.println(fileName);
 
             try {
@@ -158,7 +158,7 @@ public class MdExtractor extends KnowledgeExtractor {
         else if(line.contains("**表") || line.contains("=\"table")) {
             parseTable(line, in, map); flag = true;
         }
-        else if(line.equals("```")) {
+        else if(Pattern.matches("```.*", line)) {
             parseCodeBlock(line, in, map); flag = true;
         }
         return flag;
@@ -181,7 +181,7 @@ public class MdExtractor extends KnowledgeExtractor {
     }
 
     public void parseTable(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
-        if(line.contains("** 表")) tbName = line.substring(line.lastIndexOf(" "));
+        if(line.contains("**表")) tbName = line.substring(line.lastIndexOf(" "));
         else tbName = "table";
         String pattern1 = ".*</a><span>.*</span>(</strong>)?</p>.*";
         String pattern2 = ".*</a>.*</p>.*";
