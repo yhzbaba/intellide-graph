@@ -11,6 +11,9 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.regex.Pattern;
 
@@ -32,8 +35,8 @@ public class MdExtractor extends KnowledgeExtractor {
     public static final String SERIAL = "serial";
     public static final String LINKDOCS = "linkdocs";
 
-    private int curLevel;
-    private String tbName;
+    private int curLevel, curLine;
+    private int lineNum;                    // number of lines of document
     ArrayList<MdSection> Entities;
 
 
@@ -58,18 +61,20 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-            if(!fileName.contains("cmd-pmm.md")) continue;
+//            if(!fileName.contains("shell-error.md")) continue;
+//            if(!fileName.contains("debug-trace.md")) continue;
 //            System.out.println(fileName);
 
             try {
-                BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(new File(file.getAbsolutePath())),"utf8"));
+                List<String> lines = Files.readAllLines(Paths.get(file.getAbsolutePath()), StandardCharsets.UTF_8);
+                lineNum = lines.size() - 1;
                 if(isCatalogDoc(file)) {
-                    parseCatalog(in);
+                    parseCatalog(lines);
                     if(Entities.get(1) != null & !map.containsKey(Entities.get(1).title))
                         map.put(Entities.get(1).title, Entities.get(1));
                 }
                 else {
-                    parseMd(in, map);
+                    parseMd(lines, map);
                     for(int i = 1;i <= 3;i++) {
                         if(Entities.get(i) != null & !map.containsKey(Entities.get(i).title)) {
                             map.put(Entities.get(i).title, Entities.get(i));
@@ -88,7 +93,7 @@ public class MdExtractor extends KnowledgeExtractor {
     }
 
     public void Init() {
-        curLevel = 1;
+        curLevel = 1; curLine = -1;
         Entities = new ArrayList<MdSection>(4);
         for(int i = 0;i <= 3;i++) {
             Entities.add(i, new MdSection());
@@ -114,12 +119,13 @@ public class MdExtractor extends KnowledgeExtractor {
         return false;
     }
 
-    public void parseCatalog(BufferedReader in) throws IOException {
-        setTitle(in);
+    public void parseCatalog(List<String> lines) throws IOException {
+        setTitle(lines);
         Entities.get(1).isCatalog = true;
         Entities.get(1).isSection = false;
-        String line = in.readLine();
-        while((line = in.readLine()) != null) {
+        ++curLine;
+        while(curLine < lineNum) {
+            String line = lines.get(++curLine);
             if((line.equals("") || line.contains("**图") || line.contains("![]"))) continue;
             if(line.contains(".md)**")) {
                 // 跳转链接
@@ -133,13 +139,13 @@ public class MdExtractor extends KnowledgeExtractor {
         }
     }
 
-    public void parseMd(BufferedReader in, Map<String, MdSection> map) throws IOException {
-        setTitle(in);
-        String line = "";
-        while ((line = in.readLine()) != null) {
+    public void parseMd(List<String> lines, Map<String, MdSection> map) throws IOException {
+        setTitle(lines);
+        while (curLine < lineNum) {
+            String line = lines.get(++curLine);
             // 跳过不考虑处理的文本
             if(TextFilter(line)) continue;
-            TypeDispatch(line, in, map);
+            TypeDispatch(line, lines, map);
         }
     }
 
@@ -147,24 +153,42 @@ public class MdExtractor extends KnowledgeExtractor {
         return (line.equals("") || line.contains("-   ") || line.contains("**图") || line.contains("![]"));
     }
 
+    public void codeBelow(List<String> lines) {
+        if((curLine + 1 < lineNum && lines.get(curLine + 1).contains("```")) || (curLine + 2 < lineNum && lines.get(curLine + 2).contains("```"))) {
+            String tmp = Entities.get(curLevel).content;
+            tmp = tmp.substring(0, tmp.length() - 1);
+            tmp += "见 codeBlock\n";
+            Entities.get(curLevel).content = tmp;
+        }
+    }
+
     /**
      * 根据文本类型转到相应的处理函数
      */
-    public boolean TypeDispatch(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
+    public boolean TypeDispatch(String line, List<String> lines, Map<String, MdSection> map) throws IOException {
         boolean flag = false;
-        if(line.contains("# ")) {
-            parseTitle(line, in, map); flag = true;
+        if(line.contains("## ")) {
+            parseTitle(line, lines, map); flag = true;
         }
         else if(line.contains("**表") || line.contains("=\"table")) {
-            parseTable(line, in, map); flag = true;
+            parseTable(line, lines, map); flag = true;
         }
-        else if(Pattern.matches("```.*", line)) {
-            parseCodeBlock(line, in, map); flag = true;
+        else if(line.contains("```")) {
+            parseCodeBlock(line, lines, map); flag = true;
+        }
+        else if(TextFilter(line)) {
+            flag = true;
+        }
+        else {
+            if(!Entities.get(curLevel).content.contains(line)) {
+                Entities.get(curLevel).content += (line + "\n");
+                codeBelow(lines);
+            }
         }
         return flag;
     }
 
-    public void parseTitle(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
+    public void parseTitle(String line, List<String> lines, Map<String, MdSection> map) throws IOException {
         // 将上文已存在的标题实体存储
         for(int i = 2;i <= 3;i++) {
             if(Entities.get(i) != null & !map.containsKey(Entities.get(i).title)) {
@@ -173,21 +197,24 @@ public class MdExtractor extends KnowledgeExtractor {
             }
         }
         if(line.contains("### ")) { // 三级标题
-            parseTitleContent(3, line, in, map);
+            parseTitleContent(3, line, lines, map);
         }
         else if(line.contains("## ")) { // 二级标题
-            parseTitleContent(2, line, in, map);
+            parseTitleContent(2, line, lines, map);
         }
     }
 
-    public void parseTable(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
+    public void parseTable(String line, List<String> lines, Map<String, MdSection> map) throws IOException {
+        String tbName = "";
         if(line.contains("**表")) tbName = line.substring(line.lastIndexOf(" "));
         else tbName = "table";
         String pattern1 = ".*</a><span>.*</span>(</strong>)?</p>.*";
         String pattern2 = ".*</a>.*</p>.*";
         ArrayList<JSONArray> tb = new ArrayList<>();
         JSONArray ja = new JSONArray();
-        while((line = in.readLine()) != null) {
+        ++curLine;
+        while(curLine < lineNum) {
+            line = lines.get(++curLine);
             if(Pattern.matches(pattern1, line) || Pattern.matches(pattern2, line)) {
                 line = line.replace("<span>", "");
                 line = line.replace("</span>", "");
@@ -209,37 +236,46 @@ public class MdExtractor extends KnowledgeExtractor {
         }
     }
 
-    public void parseCodeBlock(String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
-        while((line = in.readLine()) != null) {
-            if(line.equals("```")) break;
-            Entities.get(curLevel).codeBlock += line + "\n";
+    public void parseCodeBlock(String line, List<String> lines, Map<String, MdSection> map) throws IOException {
+        String codeInfo = "";
+        if(lines.get(curLine - 2).equals(""))
+            codeInfo = lines.get(curLine - 1);
+        else codeInfo = lines.get(curLine - 2);
+        String codeContent = "";
+        while(curLine < lineNum) {
+            line = lines.get(++curLine);
+            if(line.contains("```")) {
+                try {
+                    Entities.get(curLevel).codeBlock.put(codeInfo, codeContent);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                break;
+            }
+            codeContent += line + " \n ";
         }
     }
 
-    public void parseTitleContent(int level, String line, BufferedReader in, Map<String, MdSection> map) throws IOException {
+    public void parseTitleContent(int level, String line, List<String> lines, Map<String, MdSection> map) throws IOException {
         curLevel = level;
         Entities.set(level, new MdSection());
         Entities.get(level).title = line.substring(level+1, line.indexOf("<"));
         Entities.get(level).level = curLevel;
-        String text = "";
-        while((text = in.readLine()) != null) {
-            if(TextFilter(text)) continue;
-            while(!TypeDispatch(text, in, map)) {
-                if(TextFilter(text)) {
-                    text = in.readLine();
-                    if(text == null) break;
-                    continue;
-                }
+        while(curLine < lineNum) {
+            String text = lines.get(++curLine);
+            while(!TypeDispatch(text, lines, map) && curLine < lineNum) {
                 // 普通文本，直接作为 content 添加
-                Entities.get(level).content += (text) + "\n";
-                text = in.readLine();
-                if(text == null) break;
+                if(!Entities.get(level).content.contains(text)) {
+                    Entities.get(level).content += (text) + "\n";
+                    codeBelow(lines);
+                }
+                text = lines.get(++curLine);
             }
         }
     }
 
-    public void setTitle(BufferedReader in) throws IOException {
-        String title = in.readLine();
+    public void setTitle(List<String> lines) throws IOException {
+        String title = lines.get(++curLine);
         if(title.contains("<")) title = title.substring(2, title.indexOf("<"));
         else title = title.substring(2);
         Entities.get(1).title = title;
@@ -254,7 +290,7 @@ public class MdExtractor extends KnowledgeExtractor {
         boolean isCatalog = false;
         boolean isSection = true;
         String content = "";
-        String codeBlock = "";
+        JSONObject codeBlock = new JSONObject(new LinkedHashMap<>());;
         JSONObject table = new JSONObject(new LinkedHashMap<>());
         ArrayList<MdSection> children = new ArrayList<>();
         ArrayList<String> linkDocs = new ArrayList<>();
@@ -267,7 +303,7 @@ public class MdExtractor extends KnowledgeExtractor {
             map.put(MdExtractor.ISSECTION, isSection);
             map.put(MdExtractor.LEVEL, level);
             map.put(MdExtractor.CONTENT, content.toString());
-            map.put(MdExtractor.CODEBLOCK, codeBlock);
+            map.put(MdExtractor.CODEBLOCK, codeBlock.toString());
             map.put(MdExtractor.TABLE, table.toString());
             map.put(MdExtractor.LINKDOCS, linkDocs.toString());
             if(isCatalog) node = inserter.createNode(map, new Label[]{MdExtractor.MARKDOWNCATALOG});
