@@ -61,8 +61,7 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-//            if(!fileName.contains("shell-error.md")) continue;
-//            if(!fileName.contains("debug-trace.md")) continue;
+//            if(!fileName.contains("process-process.md")) continue;
 //            System.out.println(fileName);
 
             try {
@@ -175,6 +174,16 @@ public class MdExtractor extends KnowledgeExtractor {
         }
         else if(line.contains("```")) {
             parseCodeBlock(line, lines, map); flag = true;
+        }
+        else if(line.contains("**说明：**") || line.contains("**须知：**")) {
+            String tmp = line.substring(line.lastIndexOf("：")-2, line.lastIndexOf("：") + 1);
+            while(curLine < lineNum && (lines.get(curLine + 1).equals("") || lines.get(curLine + 1).charAt(0) == '>')) {
+                if(lines.get(curLine + 1).equals("")) {
+                    ++curLine; continue;
+                }
+                tmp += lines.get(++curLine).substring(1);
+            }
+            Entities.get(curLevel).content += (tmp + "\n");
         }
         else if(TextFilter(line)) {
             flag = true;
