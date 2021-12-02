@@ -61,7 +61,7 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-//            if(!fileName.contains("process-process.md")) continue;
+            if(!fileName.contains("nfs.md")) continue;
 //            System.out.println(fileName);
 
             try {
@@ -176,14 +176,7 @@ public class MdExtractor extends KnowledgeExtractor {
             parseCodeBlock(line, lines, map); flag = true;
         }
         else if(line.contains("**说明：**") || line.contains("**须知：**")) {
-            String tmp = line.substring(line.lastIndexOf("：")-2, line.lastIndexOf("：") + 1);
-            while(curLine < lineNum && (lines.get(curLine + 1).equals("") || lines.get(curLine + 1).charAt(0) == '>')) {
-                if(lines.get(curLine + 1).equals("")) {
-                    ++curLine; continue;
-                }
-                tmp += lines.get(++curLine).substring(1);
-            }
-            Entities.get(curLevel).content += (tmp + "\n");
+            parseQuote(line, lines, map); flag = true;
         }
         else if(TextFilter(line)) {
             flag = true;
@@ -281,6 +274,31 @@ public class MdExtractor extends KnowledgeExtractor {
                 text = lines.get(++curLine);
             }
         }
+    }
+
+    public void parseQuote(String line, List<String> lines, Map<String, MdSection> map) {
+        String tmp = line.substring(line.lastIndexOf("：")-2, line.lastIndexOf("：") + 1);
+        Entities.get(curLevel).content += (tmp + "\n");
+        while(curLine < lineNum && !(line = lines.get(++curLine)).equals("") && line.charAt(0) == '>') {
+            if(line.equals(">```")) {
+                // 引用块（block-quote）内的代码块
+                String key = lines.get(curLine - 1);
+                String value = "";
+                String t = "";
+                while(curLine < lineNum && !((t = lines.get(++curLine)).equals(">```"))) {
+                    value += t.substring(1);
+                }
+                try {
+                    Entities.get(curLevel).codeBlock.put(key, value);
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+                // 这里的代码块同时添加到content中
+                Entities.get(curLevel).content += (value + "\n");
+            }
+            Entities.get(curLevel).content += (line + "\n");
+        }
+        curLine--;
     }
 
     public void setTitle(List<String> lines) throws IOException {
