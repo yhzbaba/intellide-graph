@@ -61,7 +61,7 @@ public class MdExtractor extends KnowledgeExtractor {
                     .replaceAll("^[/\\\\]+", "");
 
 //            fileName = fileName.substring(0, fileName.lastIndexOf("."));
-            if(!fileName.contains("nfs.md")) continue;
+//            if(!fileName.contains("nfs.md")) continue;
 //            System.out.println(fileName);
 
             try {
