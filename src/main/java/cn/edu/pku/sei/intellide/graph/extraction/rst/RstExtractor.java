@@ -37,7 +37,7 @@ public class RstExtractor extends KnowledgeExtractor {
 
     public static void main(String[] args) {
         RstExtractor test = new RstExtractor();
-        test.setDataDir("E:\\changwenhui\\SoftwareReuse\\knowledgeGraph\\openHarmony\\parseDocs\\qemu-docs");
+        test.setDataDir("E:\\changwenhui\\SoftwareReuse\\knowledgeGraph\\openHarmony\\parseData\\qemu-docs");
         test.extraction();
     }
 
