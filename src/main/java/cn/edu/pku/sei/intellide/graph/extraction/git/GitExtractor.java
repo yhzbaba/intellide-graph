@@ -4,6 +4,8 @@ import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -14,6 +16,7 @@ import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -35,6 +38,12 @@ public class GitExtractor extends KnowledgeExtractor {
     private Map<String, Long> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
 
+    public static void main(String[] args) {
+        GitExtractor test = new GitExtractor();
+        test.setDataDir("E:\\changwenhui\\SoftwareReuse\\knowledgeGraph\\openHarmony\\kernel_liteos_a\\.git");
+        test.extraction();
+    }
+
     @Override
     public boolean isBatchInsert() {
         return true;
@@ -55,11 +64,12 @@ public class GitExtractor extends KnowledgeExtractor {
             Git git = new Git(repository);
             Iterable<RevCommit> commits = null;
             try {
-                commits = git.log().call();
+//                commits = git.log().call();
+                commits = git.log().setMaxCount(10).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
-            for (RevCommit commit : commits)
+            for (RevCommit commit : commits) {
                 try {
                     parseCommit(commit, repository, git);
                 } catch (IOException e) {
@@ -67,6 +77,7 @@ public class GitExtractor extends KnowledgeExtractor {
                 } catch (GitAPIException e) {
                     e.printStackTrace();
                 }
+            }
         }
         parentsMap.entrySet().forEach(entry -> {
             long commitNodeId = commitMap.get(entry.getKey());
@@ -78,7 +89,10 @@ public class GitExtractor extends KnowledgeExtractor {
     }
 
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
-        //System.out.println(commit.getName());
+        System.out.println("===== commit information: ======");
+        System.out.println("commit name: " + commit.getName());
+        System.out.println(commit.getShortMessage());
+        System.out.println(commit.getParentCount());
         Map<String, Object> map = new HashMap<>();
         map.put(NAME, commit.getName());
         String message = commit.getFullMessage();
@@ -86,7 +100,16 @@ public class GitExtractor extends KnowledgeExtractor {
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
         Set<String> parentNames = new HashSet<>();
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        DiffFormatter df = new DiffFormatter(out);
+        df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
+        df.setRepository(git.getRepository());
+
         for (int i = 0; i < commit.getParentCount(); i++) {
+            if(i > 0) break;
+            System.out.println("===== commit parent information: ======");
+            System.out.println("parent name: " + commit.getParent(i).getName());
             parentNames.add(commit.getParent(i).getName());
             ObjectId head = repository.resolve(commit.getName() + "^{tree}");
             ObjectId old = repository.resolve(commit.getParent(i).getName() + "^{tree}");
@@ -96,7 +119,15 @@ public class GitExtractor extends KnowledgeExtractor {
             CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
             newTreeIter.reset(reader, head);
             List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
+            // 为什么会有多个diff？机制
+            System.out.println(diffs.size());
             for (int k = 0; k < diffs.size(); k++) {
+
+                df.format(diffs.get(k));
+                String diffText = out.toString("UTF-8");
+                System.out.println(k + " ---" + diffText);
+//                System.out.println(diffs.get(k));
+
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
         }
