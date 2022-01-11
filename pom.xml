@@ -215,6 +215,17 @@
             <artifactId>pdfbox-app</artifactId>
             <version>1.8.10</version>
         </dependency>
+        <dependency>
+            <groupId>com.github.mhoffrog.attached</groupId>
+            <artifactId>org.eclipse.cdt.core</artifactId>
+            <version>5.11.0</version>
+        </dependency>
+        <!-- https://mvnrepository.com/artifact/org.eclipse.core/resources -->
+        <dependency>
+            <groupId>org.eclipse.core</groupId>
+            <artifactId>resources</artifactId>
+            <version>3.3.0-v20070604</version>
+        </dependency>
     </dependencies>
 
 </project>
