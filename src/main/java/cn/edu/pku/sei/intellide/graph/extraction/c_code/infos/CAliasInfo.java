@@ -11,7 +11,7 @@ import java.util.Map;
 
 public class CAliasInfo {
     @Getter
-    private long id;
+    private long id = -1;
     @Getter
     @Setter
     private String name;
@@ -23,6 +23,7 @@ public class CAliasInfo {
     private String comment;
 
     private long createNode(BatchInserter inserter) {
+        if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.ORIGINTYPE, originType);

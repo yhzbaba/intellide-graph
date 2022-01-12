@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 public class CFunctionInfo {
     @Getter
-    private long id;
+    private long id = -1;
     @Getter
     @Setter
     private String name;
@@ -61,6 +61,7 @@ public class CFunctionInfo {
     /**
      * 这个函数所调用的函数名的列表,初始化里面装的是调用的函数名列表，二次装的是belongToName
      */
+    @Getter
     @Setter
     private List<String> callFunctionNameList = new ArrayList<>();
 
@@ -112,17 +113,40 @@ public class CFunctionInfo {
         }
     }
 
+    public void setFunc(CFunctionInfo func) {
+        name = func.getName();
+        content = func.getContent();
+        fullName = func.getFullName();
+        belongTo = func.getBelongTo();
+        belongToName = func.getBelongToName();
+        isInline = func.getIsInline();
+        isConst = func.getIsConst();
+        isDefine = func.getIsDefine();
+    }
+
     public long createNode(BatchInserter inserter) {
+        if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
-        map.put(CExtractor.CONTENT, name);
-        map.put(CExtractor.FULLNAME, name);
-        map.put(CExtractor.BELONGTO, name);
-        map.put(CExtractor.BELONGTINAME, name);
-        map.put(CExtractor.ISINLINE, name);
-        map.put(CExtractor.ISCONST, name);
-        map.put(CExtractor.ISDEFINE, name);
+        map.put(CExtractor.CONTENT, content);
+        map.put(CExtractor.FULLNAME, fullName);
+        map.put(CExtractor.BELONGTO, belongTo);
+        map.put(CExtractor.BELONGTINAME, belongToName);
+        map.put(CExtractor.ISINLINE, isInline);
+        map.put(CExtractor.ISCONST, isConst);
+        map.put(CExtractor.ISDEFINE, isDefine);
         id = inserter.createNode(map, CExtractor.c_function);
         return id;
+    }
+
+    @Override
+    public int hashCode() {
+        return fullName.hashCode();
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        CFunctionInfo func = (CFunctionInfo) obj;
+        return this.fullName.equals(func.getFullName());
     }
 }

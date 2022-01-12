@@ -9,10 +9,11 @@ import org.neo4j.unsafe.batchinsert.BatchInserter;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 public class CVariableInfo {
     @Getter
-    private long id;
+    private long id = -1;
 
     /**
      * 变量名(如果是宏那就是宏的内容)
@@ -61,6 +62,7 @@ public class CVariableInfo {
     private IASTSimpleDeclaration simpleDeclaration;
 
     public long createNode(BatchInserter inserter) {
+        if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.CONTENT, content);
@@ -69,5 +71,16 @@ public class CVariableInfo {
         map.put(CExtractor.ISSTRUCTVARIABLE, isStructVariable);
         id = inserter.createNode(map, CExtractor.c_variable);
         return id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, belongTo);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        CVariableInfo var = (CVariableInfo) obj;
+        return (this.name.equals(var.getName()) && this.belongTo.equals(var.getBelongTo()));
     }
 }

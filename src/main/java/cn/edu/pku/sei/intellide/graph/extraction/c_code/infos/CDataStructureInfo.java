@@ -7,14 +7,11 @@ import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class CDataStructureInfo {
     @Getter
-    private long id;
+    private long id = -1;
     @Getter
     @Setter
     private String name;
@@ -35,20 +32,21 @@ public class CDataStructureInfo {
     private List<CFieldInfo> fieldInfoList = new ArrayList<>();
 
 
-    public void initEnumFieldInfo() {
+    public void initEnumFieldInfo(BatchInserter inserter) {
         for (IASTNode node: simpleDeclaration.getChildren()) {
             for (IASTNode node2: node.getChildren()) {
                 if (node2 instanceof IASTEnumerationSpecifier.IASTEnumerator) {
                     CFieldInfo fieldInfo = new CFieldInfo();
                     fieldInfo.setName(((IASTEnumerationSpecifier.IASTEnumerator) node2).getName().toString());
                     fieldInfo.setType("int");
+                    fieldInfo.createNode(inserter);
                     fieldInfoList.add(fieldInfo);
                 }
             }
         }
     }
 
-    public void initStructFieldInfo() {
+    public void initStructFieldInfo(BatchInserter inserter) {
         for (IASTNode node: simpleDeclaration.getChildren()) {
             for (IASTNode node2: node.getChildren()) {
                 CFieldInfo fieldInfo = new CFieldInfo();
@@ -86,12 +84,14 @@ public class CDataStructureInfo {
                     type.append("[]");
                 }
                 fieldInfo.setType(type.toString());
+                fieldInfo.createNode(inserter);
                 fieldInfoList.add(fieldInfo);
             }
         }
     }
 
     public long createNode(BatchInserter inserter) {
+        if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.CONTENT, content);
@@ -99,5 +99,16 @@ public class CDataStructureInfo {
         map.put(CExtractor.ISENUM, isEnum);
         id = inserter.createNode(map, CExtractor.c_field);
         return id;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, typedefName);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        CDataStructureInfo ds = (CDataStructureInfo) obj;
+        return (this.name.equals(ds.getName()) && this.typedefName.equals(ds.getTypedefName()));
     }
 }

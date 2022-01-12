@@ -38,7 +38,7 @@ public class CProjectInfo {
                 } else {
                     continue;
                 }
-                System.out.println(fileName);
+//                System.out.println(fileName);
                 IASTTranslationUnit translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(fileFullName));
                 CCodeFileInfo codeFileInfo = new CCodeFileInfo(inserter, fileName, translationUnit);
                 codeFileInfoMap.put(fileName, codeFileInfo);
