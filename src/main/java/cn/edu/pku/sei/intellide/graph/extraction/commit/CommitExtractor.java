@@ -1,7 +1,6 @@
 package cn.edu.pku.sei.intellide.graph.extraction.commit;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
-import cn.edu.pku.sei.intellide.graph.extraction.git.GitExtractor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;

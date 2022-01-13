@@ -108,7 +108,7 @@ public class CFunctionInfo {
                 }
             }
             List<String> filtered = finalResult.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
-            System.out.println(name + "函数的调用情况: " + filtered);
+//            System.out.println(name + "函数的调用情况: " + filtered);
             setCallFunctionNameList(filtered);
         }
     }

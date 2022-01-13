@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.commit.CommitExtractor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -13,16 +14,16 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.neo4j.graphdb.Label;
-import org.neo4j.graphdb.RelationshipType;
+import org.json.JSONException;
+import org.json.JSONObject;
+import org.neo4j.graphdb.*;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
 
-public class GitExtractor extends KnowledgeExtractor {
-
+public class GitUpdate extends KnowledgeExtractor {
     public static final RelationshipType PARENT = RelationshipType.withName("parent");
     public static final String NAME = "name";
     public static final String MESSAGE = "message";
@@ -72,7 +73,11 @@ public class GitExtractor extends KnowledgeExtractor {
             }
             for (RevCommit commit : commits) {
                 try {
+                    // 已处理过的commit数据，跳过
+                    if(timeAhead(commit)) continue;
+
                     parseCommit(commit, repository, git);
+
                 } catch (IOException e) {
                     e.printStackTrace();
                 } catch (GitAPIException e) {
@@ -90,6 +95,8 @@ public class GitExtractor extends KnowledgeExtractor {
     }
 
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
+        System.out.println(commit.getShortMessage());
+
         Map<String, Object> map = new HashMap<>();
         map.put(NAME, commit.getName());
         String message = commit.getFullMessage();
@@ -97,11 +104,6 @@ public class GitExtractor extends KnowledgeExtractor {
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
         Set<String> parentNames = new HashSet<>();
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        DiffFormatter df = new DiffFormatter(out);
-        df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
-        df.setRepository(git.getRepository());
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -119,11 +121,6 @@ public class GitExtractor extends KnowledgeExtractor {
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
         long commitNodeId = this.getInserter().createNode(map, COMMIT);
-        // 将最新的commit标记
-        if(!flag) {
-            this.getInserter().createNode(map, TIMESTAMP);
-            flag = true;
-        }
         commitMap.put(commit.getName(), commitNodeId);
         parentsMap.put(commit.getName(), parentNames);
         PersonIdent author = commit.getAuthorIdent();
@@ -153,5 +150,24 @@ public class GitExtractor extends KnowledgeExtractor {
         } else
             this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
     }
-
+    
+    private int getCommitTime() {
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            ResourceIterator<Node> nodes = db.findNodes(TIMESTAMP);
+            if(nodes.hasNext()) {
+                Node node = nodes.next();
+                int commitTime = (int) node.getProperty(COMMIT_TIME);
+                return commitTime;
+            }
+            tx.success();
+        }
+        return -1;
+    }
+    
+    private boolean timeAhead(RevCommit commit) {
+        int ct = commit.getCommitTime();
+        if(ct < getCommitTime()) return true;
+        return false;
+    }
 }

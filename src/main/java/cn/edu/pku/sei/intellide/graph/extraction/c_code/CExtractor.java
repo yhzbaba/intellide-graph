@@ -88,7 +88,7 @@ public class CExtractor extends KnowledgeExtractor {
                         List<CFunctionInfo> tempList = getFunctionFromName(projectInfo, s);
                         if(tempList.size() > 1) {
                             List<String> includeCodeFileList = cCodeFileInfo.getIncludeCodeFileList();
-                            System.out.println(includeCodeFileList);
+//                            System.out.println(includeCodeFileList);
                             for (CFunctionInfo info : tempList) {
                                 if (cFunctionInfo.getBelongTo().equals(info.getBelongTo())) {
                                     // (2)
@@ -107,7 +107,7 @@ public class CExtractor extends KnowledgeExtractor {
                             newFilter.add(cFunctionInfo.getBelongTo() + s);
                         }
                     }
-                    System.out.println("filter: " + newFilter);
+//                    System.out.println("filter: " + newFilter);
                     cFunctionInfo.setCallFunctionNameList(newFilter);
                 });
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
