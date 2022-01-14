@@ -1,12 +1,9 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
-import cn.edu.pku.sei.intellide.graph.extraction.commit.CommitExtractor;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
-import org.eclipse.jgit.diff.DiffFormatter;
-import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -14,11 +11,9 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.json.JSONException;
-import org.json.JSONObject;
 import org.neo4j.graphdb.*;
+import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -36,10 +31,14 @@ public class GitUpdate extends KnowledgeExtractor {
     public static final RelationshipType CREATOR = RelationshipType.withName("creator");
     public static final RelationshipType COMMITTER = RelationshipType.withName("committer");
 
-    private Map<String, Long> commitMap = new HashMap<>();
-    private Map<String, Long> personMap = new HashMap<>();
+    private Map<String, Node> commitMap = new HashMap<>();
+    private Map<String, Node> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
-    private boolean flag = false;   // 记录最新的commit
+
+    /**
+     * 记录此次更新涉及到的commit信息（commit_name作为标识）
+     */
+    private Map<String, CommitInfo> commitInfos = new HashMap<>();
 
     public static void main(String[] args) {
         GitExtractor test = new GitExtractor();
@@ -47,10 +46,10 @@ public class GitUpdate extends KnowledgeExtractor {
         test.extraction();
     }
 
-    @Override
-    public boolean isBatchInsert() {
-        return true;
-    }
+//    @Override
+//    public boolean isBatchInsert() {
+//        return true;
+//    }
 
     @Override
     public void extraction() {
@@ -58,6 +57,10 @@ public class GitUpdate extends KnowledgeExtractor {
         FileRepositoryBuilder repositoryBuilder = new FileRepositoryBuilder();
         repositoryBuilder.setMustExist(true);
         repositoryBuilder.setGitDir(new File(this.getDataDir()));
+
+        // 当前图谱的最新的 commit_time
+        int timeStamp = getCommitTime();
+        System.out.println(timeStamp);
         try {
             repository = repositoryBuilder.build();
         } catch (IOException e) {
@@ -67,14 +70,15 @@ public class GitUpdate extends KnowledgeExtractor {
             Git git = new Git(repository);
             Iterable<RevCommit> commits = null;
             try {
-                commits = git.log().call();
+                // 获取所有 commit 日志记录
+                commits = git.log().setMaxCount(10).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
             for (RevCommit commit : commits) {
                 try {
                     // 已处理过的commit数据，跳过
-                    if(timeAhead(commit)) continue;
+                    if(commit.getCommitTime() < timeStamp) continue;
 
                     parseCommit(commit, repository, git);
 
@@ -85,13 +89,23 @@ public class GitUpdate extends KnowledgeExtractor {
                 }
             }
         }
-        parentsMap.entrySet().forEach(entry -> {
-            long commitNodeId = commitMap.get(entry.getKey());
-            entry.getValue().forEach(parentName -> {
-                if (commitMap.containsKey(parentName))
-                    this.getInserter().createRelationship(commitNodeId, commitMap.get(parentName), PARENT, new HashMap<>());
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            parentsMap.entrySet().forEach(entry -> {
+                Node commitNode = commitMap.get(entry.getKey());
+                entry.getValue().forEach(parentName -> {
+                    if (commitMap.containsKey(parentName)) {
+                        commitNode.createRelationshipTo(commitMap.get(parentName), PARENT);
+                    }
+                });
             });
-        });
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
+        System.out.println(commitInfos);
     }
 
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
@@ -120,37 +134,62 @@ public class GitUpdate extends KnowledgeExtractor {
             }
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
-        long commitNodeId = this.getInserter().createNode(map, COMMIT);
-        commitMap.put(commit.getName(), commitNodeId);
-        parentsMap.put(commit.getName(), parentNames);
-        PersonIdent author = commit.getAuthorIdent();
-        String personStr = author.getName() + ": " + author.getEmailAddress();
-        if (!personMap.containsKey(personStr)) {
-            Map<String, Object> pMap = new HashMap<>();
-            String name = author.getName();
-            String email = author.getEmailAddress();
-            pMap.put(NAME, name != null ? name : "");
-            pMap.put(EMAIL_ADDRESS, email != null ? email : "");
-            long personNodeId = this.getInserter().createNode(pMap, GIT_USER);
-            personMap.put(personStr, personNodeId);
-            this.getInserter().createRelationship(commitNodeId, personNodeId, CREATOR, new HashMap<>());
-        } else
-            this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), CREATOR, new HashMap<>());
-        PersonIdent committer = commit.getCommitterIdent();
-        personStr = committer.getName() + ": " + committer.getEmailAddress();
-        if (!personMap.containsKey(personStr)) {
-            Map<String, Object> pMap = new HashMap<>();
-            String name = committer.getName();
-            String email = committer.getEmailAddress();
-            pMap.put(NAME, name != null ? name : "");
-            pMap.put(EMAIL_ADDRESS, email != null ? email : "");
-            long personNodeId = this.getInserter().createNode(pMap, GIT_USER);
-            personMap.put(personStr, personNodeId);
-            this.getInserter().createRelationship(commitNodeId, personNodeId, COMMITTER, new HashMap<>());
-        } else
-            this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
+
+        // neo4j transaction
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            // 创建 commit 节点并设置属性
+            Node commitNode = db.createNode(COMMIT);
+            commitNode.setProperty(NAME, map.get(NAME));
+            commitNode.setProperty(MESSAGE, map.get(MESSAGE));
+            commitNode.setProperty(COMMIT_TIME, map.get(COMMIT_TIME));
+            commitNode.setProperty(DIFF_SUMMARY, map.get(DIFF_SUMMARY));
+
+            commitMap.put(commit.getName(), commitNode);
+            parentsMap.put(commit.getName(), parentNames);
+            PersonIdent author = commit.getAuthorIdent();
+            String personStr = author.getName() + ": " + author.getEmailAddress();
+            if (!personMap.containsKey(personStr)) {
+                Map<String, Object> pMap = new HashMap<>();
+                String name = author.getName();
+                String email = author.getEmailAddress();
+                pMap.put(NAME, name != null ? name : "");
+                pMap.put(EMAIL_ADDRESS, email != null ? email : "");
+                Node personNode = db.createNode(GIT_USER);
+                personNode.setProperty(NAME, pMap.get(NAME));
+                personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
+                personMap.put(personStr, personNode);
+                commitNode.createRelationshipTo(personNode, CREATOR);
+            } else {
+                commitNode.createRelationshipTo(personMap.get(personStr), CREATOR);
+            }
+            PersonIdent committer = commit.getCommitterIdent();
+            personStr = committer.getName() + ": " + committer.getEmailAddress();
+            if (!personMap.containsKey(personStr)) {
+                Map<String, Object> pMap = new HashMap<>();
+                String name = committer.getName();
+                String email = committer.getEmailAddress();
+                pMap.put(NAME, name != null ? name : "");
+                pMap.put(EMAIL_ADDRESS, email != null ? email : "");
+                Node personNode = db.createNode(GIT_USER);
+                personNode.setProperty(NAME, pMap.get(NAME));
+                personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
+                personMap.put(personStr, personNode);
+                commitNode.createRelationshipTo(personNode, COMMITTER);
+            } else {
+                commitNode.createRelationshipTo(personMap.get(personStr), COMMITTER);
+            }
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+
+        addCommitInfo(map, parentNames);
     }
-    
+
+    /**
+     * 访问数据库，获取当前图谱最新的commit_time
+     */
     private int getCommitTime() {
         GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
@@ -161,13 +200,39 @@ public class GitUpdate extends KnowledgeExtractor {
                 return commitTime;
             }
             tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
         return -1;
     }
-    
-    private boolean timeAhead(RevCommit commit) {
-        int ct = commit.getCommitTime();
-        if(ct < getCommitTime()) return true;
-        return false;
+
+    /**
+     * 将当前commit的信息存入全局变量commitInfos中
+     */
+    private void addCommitInfo(Map<String, Object> map, Set<String> parentNames) {
+        CommitInfo gitInfo = new CommitInfo();
+        gitInfo.name = (String) map.get(NAME);
+        gitInfo.diffInfo = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
+        gitInfo.parent.addAll(parentNames);
+        commitInfos.put(gitInfo.name, gitInfo);
+    }
+
+    /**
+     * 将图谱的最新commit节点更新
+     */
+    private void updateTimeStamp() {
+
+    }
+
+    /**
+     * 内部类，用于记录图谱更新需要的commit信息
+     */
+    class CommitInfo {
+        String name;
+        /**
+         * 每个String是: Change_type oldFilePath to newFilePath 的格式
+         */
+        List<String> diffInfo = new ArrayList<>();
+        List<String> parent = new ArrayList<>();
     }
 }
