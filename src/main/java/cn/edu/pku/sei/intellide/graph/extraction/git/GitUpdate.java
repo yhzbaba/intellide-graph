@@ -34,6 +34,9 @@ public class GitUpdate extends KnowledgeExtractor {
     private Map<String, Node> commitMap = new HashMap<>();
     private Map<String, Node> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
+    // 记录并更新图谱的 TIMESTAMP 节点
+    private Map<String, Object> timeStampMap = new HashMap<>();
+    private boolean flag = false;
 
     /**
      * 记录此次更新涉及到的commit信息（commit_name作为标识）
@@ -106,10 +109,14 @@ public class GitUpdate extends KnowledgeExtractor {
 
         // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
         System.out.println(commitInfos);
+
+        // 更新 timeStamp
+        updateTimeStamp();
     }
 
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
-        System.out.println(commit.getShortMessage());
+
+//        System.out.println(commit.getShortMessage());
 
         Map<String, Object> map = new HashMap<>();
         map.put(NAME, commit.getName());
@@ -134,6 +141,11 @@ public class GitUpdate extends KnowledgeExtractor {
             }
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
+        // 如果是最新的commit，记录作为 timeStamp
+        if(!flag) {
+            flag = true;
+            timeStampMap = map;
+        }
 
         // neo4j transaction
         GraphDatabaseService db = this.getDb();
@@ -183,7 +195,6 @@ public class GitUpdate extends KnowledgeExtractor {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-
         addCommitInfo(map, parentNames);
     }
 
@@ -221,7 +232,22 @@ public class GitUpdate extends KnowledgeExtractor {
      * 将图谱的最新commit节点更新
      */
     private void updateTimeStamp() {
-
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            ResourceIterator<Node> nodes = db.findNodes(TIMESTAMP);
+            if(nodes.hasNext()) {
+                Node node = nodes.next();
+                node.delete();
+                Node tsNode = db.createNode(TIMESTAMP);
+                tsNode.setProperty(NAME, timeStampMap.get(NAME));
+                tsNode.setProperty(MESSAGE, timeStampMap.get(MESSAGE));
+                tsNode.setProperty(COMMIT_TIME, timeStampMap.get(COMMIT_TIME));
+                tsNode.setProperty(DIFF_SUMMARY, timeStampMap.get(DIFF_SUMMARY));
+            }
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
