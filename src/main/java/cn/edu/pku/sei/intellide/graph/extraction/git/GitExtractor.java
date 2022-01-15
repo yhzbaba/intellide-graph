@@ -66,11 +66,17 @@ public class GitExtractor extends KnowledgeExtractor {
             Git git = new Git(repository);
             Iterable<RevCommit> commits = null;
             try {
-                commits = git.log().call();
+//                commits = git.log().call();
+                commits = git.log().setMaxCount(50).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
+            // 只取50条记录，同时最新的10条记录用于update阶段
+            int cnt = 0;
             for (RevCommit commit : commits) {
+                if(cnt < 10) {
+                    cnt++; continue;
+                }
                 try {
                     parseCommit(commit, repository, git);
                 } catch (IOException e) {

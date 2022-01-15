@@ -49,11 +49,6 @@ public class GitUpdate extends KnowledgeExtractor {
         test.extraction();
     }
 
-//    @Override
-//    public boolean isBatchInsert() {
-//        return true;
-//    }
-
     @Override
     public void extraction() {
         Repository repository = null;
@@ -74,6 +69,7 @@ public class GitUpdate extends KnowledgeExtractor {
             Iterable<RevCommit> commits = null;
             try {
                 // 获取所有 commit 日志记录
+//                commits = git.log().call();
                 commits = git.log().setMaxCount(10).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
@@ -109,11 +105,17 @@ public class GitUpdate extends KnowledgeExtractor {
 
         // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
         System.out.println(commitInfos);
+        new CodeUpdate(commitInfos);
 
         // 更新 timeStamp
         updateTimeStamp();
     }
 
+    /**
+     * 解析单个commit，并创建相关实体的联系
+     * @throws IOException
+     * @throws GitAPIException
+     */
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
 
 //        System.out.println(commit.getShortMessage());
