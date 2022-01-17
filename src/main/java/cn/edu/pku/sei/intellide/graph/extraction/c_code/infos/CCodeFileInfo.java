@@ -9,6 +9,7 @@ import org.apache.poi.ss.formula.functions.T;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
 import org.eclipse.cdt.internal.core.dom.parser.c.CASTParameterDeclaration;
+import org.json.JSONArray;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 import org.springframework.boot.SpringApplication;
 
@@ -34,17 +35,33 @@ public class CCodeFileInfo {
     @Setter
     private List<CVariableInfo> variableInfoList = new ArrayList<>();
 
+    private BatchInserter inserter = null;
+
+    public CCodeFileInfo(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public CCodeFileInfo(String fileName, IASTTranslationUnit unit) {
+        this.fileName = fileName;
+        this.unit = unit;
+        this.initFunctions();
+        this.initDataStructures();
+        this.initVariables();
+        this.initIncludeCodeFiles();
+    }
+
     public CCodeFileInfo(BatchInserter inserter, String fileName, IASTTranslationUnit unit) {
         this.fileName = fileName;
         this.unit = unit;
-        this.createNode(inserter);
-        this.initFunctions(inserter);
-        this.initDataStructures(inserter);
-        this.initVariables(inserter);
-        this.initIncludeCodeFiles(inserter);
+        this.inserter = inserter;
+        this.initFunctions();
+        this.initDataStructures();
+        this.initVariables();
+        this.initIncludeCodeFiles();
+        this.createNode();
     }
 
-    public void initFunctions(BatchInserter inserter) {
+    public void initFunctions() {
         IASTDeclaration[] declarations = unit.getDeclarations();
         for(IASTDeclaration declaration : declarations) {
             if(declaration instanceof IASTFunctionDefinition) {
@@ -69,14 +86,14 @@ public class CCodeFileInfo {
                 functionInfo.setIsInline(declSpecifier.isInline());
                 functionInfo.setIsConst(declSpecifier.isConst());
                 functionInfo.setIsDefine(false);
-                functionInfo.createNode(inserter);
+                if(this.inserter != null) functionInfo.createNode(inserter);
                 functionInfoList.add(functionInfo);
             }
         }
         deDuplication(functionInfoList);
     }
 
-    public void initDataStructures(BatchInserter inserter) {
+    public void initDataStructures() {
         IASTDeclaration[] declarations = unit.getDeclarations();
         for(IASTDeclaration declaration : declarations) {
             if (declaration instanceof IASTSimpleDeclaration) {
@@ -84,7 +101,7 @@ public class CCodeFileInfo {
                 IASTDeclSpecifier declSpecifier = simpleDeclaration.getDeclSpecifier();
                 if (declSpecifier instanceof IASTEnumerationSpecifier) {
                     // 这块区域是enum，包括typedef
-                    CDataStructureInfo structureInfo = new CDataStructureInfo();
+                    CDataStructureInfo structureInfo = new CDataStructureInfo(inserter);
                     structureInfo.setSimpleDeclaration(simpleDeclaration);
                     structureInfo.setContent(simpleDeclaration.getRawSignature());
                     structureInfo.setIsEnum(true);
@@ -96,12 +113,12 @@ public class CCodeFileInfo {
                             structureInfo.setTypedefName(declarator.getName().toString());
                         }
                     }
-                    structureInfo.initEnumFieldInfo(inserter);
-                    structureInfo.createNode(inserter);
+                    structureInfo.initEnumFieldInfo();
+                    if(this.inserter != null) structureInfo.createNode();
                     dataStructureList.add(structureInfo);
                 } else if (declSpecifier instanceof IASTCompositeTypeSpecifier) {
                     // 结构体 包括typedef
-                    CDataStructureInfo structureInfo = new CDataStructureInfo();
+                    CDataStructureInfo structureInfo = new CDataStructureInfo(inserter);
                     structureInfo.setSimpleDeclaration(simpleDeclaration);
                     structureInfo.setContent(simpleDeclaration.getRawSignature());
                     structureInfo.setIsEnum(false);
@@ -113,8 +130,8 @@ public class CCodeFileInfo {
                             structureInfo.setTypedefName(declarator.getName().toString());
                         }
                     }
-                    structureInfo.initStructFieldInfo(inserter);
-                    structureInfo.createNode(inserter);
+                    structureInfo.initStructFieldInfo();
+                    if(this.inserter != null) structureInfo.createNode();
                     dataStructureList.add(structureInfo);
                 }
             }
@@ -122,7 +139,7 @@ public class CCodeFileInfo {
         deDuplication(dataStructureList);
     }
 
-    public void initVariables(BatchInserter inserter) {
+    public void initVariables() {
         IASTDeclaration[] declarations = unit.getDeclarations();
         for(IASTDeclaration declaration : declarations) {
             if (declaration instanceof IASTSimpleDeclaration) {
@@ -141,7 +158,7 @@ public class CCodeFileInfo {
                     variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(false);
-                    variableInfo.createNode(inserter);
+                    if(this.inserter != null) variableInfo.createNode(inserter);
                     variableInfoList.add(variableInfo);
                 } else if (declSpecifier instanceof IASTElaboratedTypeSpecifier) {
                     // 不使用typedef名字进行声明的结构体变量
@@ -159,7 +176,7 @@ public class CCodeFileInfo {
                     variableInfo.setIsStructVariable(true);
                     // 暂时防止程序崩溃增加的条件
                     if(variableInfo.getName() == null) variableInfo.setName("default_name");
-                    variableInfo.createNode(inserter);
+                    if(this.inserter != null) variableInfo.createNode(inserter);
                     variableInfoList.add(variableInfo);
                 } else if (declSpecifier instanceof ICASTTypedefNameSpecifier) {
                     // 使用typedef名字进行声明的结构体变量
@@ -175,7 +192,7 @@ public class CCodeFileInfo {
                     }
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(true);
-                    variableInfo.createNode(inserter);
+                    if(this.inserter != null) variableInfo.createNode(inserter);
                     variableInfoList.add(variableInfo);
                 }
             }
@@ -183,7 +200,7 @@ public class CCodeFileInfo {
         deDuplication(variableInfoList);
     }
 
-    public void initIncludeCodeFiles(BatchInserter inserter) {
+    public void initIncludeCodeFiles() {
         IASTPreprocessorStatement[] ps = unit.getAllPreprocessorStatements();
         for(IASTPreprocessorStatement statement : ps) {
             if (statement instanceof IASTPreprocessorFunctionStyleMacroDefinition) {
@@ -203,7 +220,7 @@ public class CCodeFileInfo {
                 functionInfo.setContent(macroDefinition.getRawSignature());
                 functionInfo.setBelongTo(fileName);
                 functionInfo.setBelongToName(fileName + macroDefinition.getName().toString());
-                functionInfo.createNode(inserter);
+                if(this.inserter != null) functionInfo.createNode(inserter);
                 functionInfoList.add(functionInfo);
             }
             if (statement instanceof IASTPreprocessorIncludeStatement) {
@@ -223,10 +240,16 @@ public class CCodeFileInfo {
         list.addAll(set);
     }
 
-    private long createNode(BatchInserter inserter) {
+    private long createNode() {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.FILENAME, fileName);
+//        JSONArray ja = new JSONArray();
+//        getFunctionInfoList().forEach(func -> {
+//            if(!func.getFullName().equals(""))
+//                ja.put(func.toString());
+//        });
+//        map.put(CExtractor.FUNCTIONLIST, ja.toString());
         id = inserter.createNode(map, CExtractor.c_code_file);
         return id;
     }

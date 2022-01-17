@@ -31,22 +31,28 @@ public class CDataStructureInfo {
     @Setter
     private List<CFieldInfo> fieldInfoList = new ArrayList<>();
 
+    private BatchInserter inserter;
 
-    public void initEnumFieldInfo(BatchInserter inserter) {
+    public CDataStructureInfo(BatchInserter inserter) {
+        this.inserter = inserter;
+    }
+
+
+    public void initEnumFieldInfo() {
         for (IASTNode node: simpleDeclaration.getChildren()) {
             for (IASTNode node2: node.getChildren()) {
                 if (node2 instanceof IASTEnumerationSpecifier.IASTEnumerator) {
                     CFieldInfo fieldInfo = new CFieldInfo();
                     fieldInfo.setName(((IASTEnumerationSpecifier.IASTEnumerator) node2).getName().toString());
                     fieldInfo.setType("int");
-                    fieldInfo.createNode(inserter);
+                    if(this.inserter != null) fieldInfo.createNode(inserter);
                     fieldInfoList.add(fieldInfo);
                 }
             }
         }
     }
 
-    public void initStructFieldInfo(BatchInserter inserter) {
+    public void initStructFieldInfo() {
         for (IASTNode node: simpleDeclaration.getChildren()) {
             for (IASTNode node2: node.getChildren()) {
                 CFieldInfo fieldInfo = new CFieldInfo();
@@ -84,13 +90,13 @@ public class CDataStructureInfo {
                     type.append("[]");
                 }
                 fieldInfo.setType(type.toString());
-                fieldInfo.createNode(inserter);
+                if(this.inserter != null) fieldInfo.createNode(inserter);
                 fieldInfoList.add(fieldInfo);
             }
         }
     }
 
-    public long createNode(BatchInserter inserter) {
+    public long createNode() {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);

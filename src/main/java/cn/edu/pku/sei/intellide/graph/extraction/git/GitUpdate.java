@@ -257,6 +257,7 @@ public class GitUpdate extends KnowledgeExtractor {
      */
     class CommitInfo {
         String name;
+        boolean isHandled = false;
         /**
          * 每个String是: Change_type oldFilePath to newFilePath 的格式
          */
