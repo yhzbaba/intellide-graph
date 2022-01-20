@@ -13,6 +13,8 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 
@@ -20,6 +22,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class GitExtractor extends KnowledgeExtractor {
 
@@ -28,6 +32,7 @@ public class GitExtractor extends KnowledgeExtractor {
     public static final String MESSAGE = "message";
     public static final String COMMIT_TIME = "commitTime";
     public static final String DIFF_SUMMARY = "diffSummary";
+    public static final String DIFF_INFO = "diffInfo";
     public static final Label COMMIT = Label.label("Commit");
     public static final Label TIMESTAMP = Label.label("TimeStamp");
     public static final String EMAIL_ADDRESS = "emailAddress";
@@ -83,6 +88,8 @@ public class GitExtractor extends KnowledgeExtractor {
                     e.printStackTrace();
                 } catch (GitAPIException e) {
                     e.printStackTrace();
+                } catch (JSONException e) {
+                    e.printStackTrace();
                 }
             }
         }
@@ -95,19 +102,15 @@ public class GitExtractor extends KnowledgeExtractor {
         });
     }
 
-    private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
+    private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException, JSONException {
         Map<String, Object> map = new HashMap<>();
         map.put(NAME, commit.getName());
         String message = commit.getFullMessage();
         map.put(MESSAGE, message != null ? message : "");
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
+        JSONObject diffInfos = new JSONObject(new LinkedHashMap<>());
         Set<String> parentNames = new HashSet<>();
-
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        DiffFormatter df = new DiffFormatter(out);
-        df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
-        df.setRepository(git.getRepository());
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -119,11 +122,25 @@ public class GitExtractor extends KnowledgeExtractor {
             CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
             newTreeIter.reset(reader, head);
             List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
+            String diff = "";
             for (int k = 0; k < diffs.size(); k++) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                DiffFormatter df = new DiffFormatter(out);
+                df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
+                df.setRepository(git.getRepository());
+                df.format(diffs.get(k));
+                String diffText = out.toString("UTF-8");
+//                System.out.println(diffText);
+                diff += diffText;
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
+            if(diff.equals("")) continue;
+            // 对 diff 进行拆分，暂且以文件作为划分依据（diff --git分割）
+            JSONObject diffList = splitDiffs(diff);
+            diffInfos.put(commit.getParent(i).getName(), diffList.toString());
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
+        map.put(DIFF_INFO, diffInfos.toString());
         long commitNodeId = this.getInserter().createNode(map, COMMIT);
         // 将最新的commit标记
         if(!flag) {
@@ -160,4 +177,31 @@ public class GitExtractor extends KnowledgeExtractor {
             this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
     }
 
+    private JSONObject splitDiffs(String diff) throws JSONException {
+        JSONObject res = new JSONObject();
+        List<String> dg = new ArrayList<>();
+        Matcher m = Pattern.compile("diff --git.*\\n").matcher(diff);
+        while(m.find()) {
+            dg.add(m.group());
+        }
+        int i = 0;
+        String filePath = "";
+        for(;i < dg.size() - 1;i++) {
+            filePath = getFilePath(dg.get(i));
+            res.put(filePath, diff.substring(diff.indexOf(dg.get(i)), diff.indexOf(dg.get(i+1))));
+        }
+        filePath = getFilePath(dg.get(i));
+        res.put(filePath ,diff.substring(diff.indexOf(dg.get(i))));
+        return res;
+    }
+
+    private String getFilePath(String msg) {
+        Matcher m = Pattern.compile("a/.*b/").matcher(msg);
+        String res = "";
+        if(m.find()) {
+            res = m.group();
+            return res.substring(2, res.length() - 3);
+        }
+        return res;
+    }
 }
