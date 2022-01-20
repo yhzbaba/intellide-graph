@@ -44,7 +44,10 @@ public class GitExtractor extends KnowledgeExtractor {
     private Map<String, Long> commitMap = new HashMap<>();
     private Map<String, Long> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
-    private boolean flag = false;   // 记录最新的commit
+    // 记录最新的commit
+    private boolean flag = false;
+
+    static JSONArray diffInfos = new JSONArray();
 
     public static void main(String[] args) {
         GitExtractor test = new GitExtractor();
@@ -73,14 +76,14 @@ public class GitExtractor extends KnowledgeExtractor {
             Iterable<RevCommit> commits = null;
             try {
 //                commits = git.log().call();
-                commits = git.log().setMaxCount(50).call();
+                commits = git.log().setMaxCount(100).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
             // 只取50条记录，同时最新的10条记录用于update阶段
             int cnt = 0;
             for (RevCommit commit : commits) {
-                if(cnt < 10) {
+                if(cnt < 30) {
                     cnt++; continue;
                 }
                 try {
@@ -110,8 +113,8 @@ public class GitExtractor extends KnowledgeExtractor {
         map.put(MESSAGE, message != null ? message : "");
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
-        JSONArray diffInfos = new JSONArray();
         Set<String> parentNames = new HashSet<>();
+        diffInfos.clear();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -136,8 +139,7 @@ public class GitExtractor extends KnowledgeExtractor {
             }
             if(diff.equals("")) continue;
             // 对 diff 进行拆分，暂且以文件作为划分依据（diff --git分割）
-            JSONObject diffList = splitDiffs(diff);
-            diffInfos.add(diffList);
+            splitDiffs(diff, diffInfos);
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
         map.put(DIFF_INFO, diffInfos.toString());
@@ -177,8 +179,7 @@ public class GitExtractor extends KnowledgeExtractor {
             this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
     }
 
-    public static JSONObject splitDiffs(String diff) throws JSONException {
-        JSONObject res = new JSONObject();
+    public static void splitDiffs(String diff, JSONArray diffInfos) throws JSONException {
         List<String> dg = new ArrayList<>();
         Matcher m = Pattern.compile("diff --git.*\\n").matcher(diff);
         while(m.find()) {
@@ -188,11 +189,14 @@ public class GitExtractor extends KnowledgeExtractor {
         String filePath = "";
         for(;i < dg.size() - 1;i++) {
             filePath = getFilePath(dg.get(i));
-            res.put(filePath, diff.substring(diff.indexOf(dg.get(i)), diff.indexOf(dg.get(i+1))));
+            JSONObject jo = new JSONObject();
+            jo.put(filePath, diff.substring(diff.indexOf(dg.get(i)), diff.indexOf(dg.get(i+1))));
+            diffInfos.add(jo);
         }
         filePath = getFilePath(dg.get(i));
-        res.put(filePath ,diff.substring(diff.indexOf(dg.get(i))));
-        return res;
+        JSONObject jo = new JSONObject();
+        jo.put(filePath, diff.substring(diff.indexOf(dg.get(i))));
+        diffInfos.add(jo);
     }
 
     public static String getFilePath(String msg) {

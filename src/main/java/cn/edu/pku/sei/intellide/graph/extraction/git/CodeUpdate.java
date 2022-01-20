@@ -16,6 +16,7 @@ import org.neo4j.graphdb.Transaction;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -57,9 +58,11 @@ public class CodeUpdate extends KnowledgeExtractor {
          }
          written += cnt;
          */
-        String lines[] = "".split("\\r?\\\\n");
-        for(String ss: lines) {
-            System.out.println(ss);
+        String s = "diff --git a/apps/shell/include/shell.h b/apps/shell/include/shell.h\nindex be1b788..ebc94e0 100644\n--- a/apps/shell/include/shell.h\n+++ b/apps/shell/include/shell.h\n@@ -67,7 +67,6 @@\n #define QUOTES_STATUS_CLOSE(qu) ((qu) == FALSE)\n #define QUOTES_STATUS_OPEN(qu)  ((qu) == TRUE)\n \n-typedef size_t bool;\n \n typedef struct {\n     unsigned int   consoleID;\n";
+        System.out.println(s);
+        List<String> lines = Arrays.asList(s.split("\n"));
+        for(int i = 0;i < lines.size();i++) {
+            System.out.println(i + ": " + lines.get(i));
         }
     }
 
@@ -105,6 +108,7 @@ public class CodeUpdate extends KnowledgeExtractor {
         JSONArray diffInfos = commitInfo.diffInfo;
         for(int i = 0;i < diffInfos.size();i++) {
             // 只涉及单个代码文件的 diff 信息
+            System.out.println("diffInfos: " + diffInfos.getJSONObject(i));
             JSONObject diff = diffInfos.getJSONObject(i);
             // 初始化用于记录的全局数据结构
             initDS();
@@ -140,8 +144,11 @@ public class CodeUpdate extends KnowledgeExtractor {
      * @param diffs 一个文件所有的diff信息，需要进一步分割
      */
     private void locateInnerFile(String diffs) {
-        String[] lines = diffs.split("\\r?\\\\n");
-        for(String line: lines) {
+        diffs = String.valueOf(diffs.split("\\r?\\\\n"));
+        List<String> lines = Arrays.asList(diffs.split("\n"));
+        for(int i = 0;i < lines.size();i++) {
+            String line = lines.get(i);
+            System.out.println(i + ": " + line);
             if(line.contains("@@")) {
                 if(line.lastIndexOf("@") == line.length() - 1) {
                     // 存在全局信息的修改
@@ -150,7 +157,7 @@ public class CodeUpdate extends KnowledgeExtractor {
                 else {
                     // 非全局修改
                     String info = line.substring(line.lastIndexOf("@") + 1);
-                    System.out.println(info);
+                    System.out.println("location info: " + info);
 
                 }
             }

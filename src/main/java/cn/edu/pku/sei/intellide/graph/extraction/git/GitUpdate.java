@@ -44,6 +44,8 @@ public class GitUpdate extends KnowledgeExtractor {
     private Map<String, Object> timeStampMap = new HashMap<>();
     private boolean flag = false;
 
+    JSONArray diffInfos = new JSONArray();
+
     /**
      * 记录此次更新涉及到的commit信息（commit_name作为标识）
      */
@@ -76,7 +78,7 @@ public class GitUpdate extends KnowledgeExtractor {
             try {
                 // 获取所有 commit 日志记录
 //                commits = git.log().call();
-                commits = git.log().setMaxCount(10).call();
+                commits = git.log().setMaxCount(30).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
@@ -112,6 +114,7 @@ public class GitUpdate extends KnowledgeExtractor {
         }
 
         // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
+
         new CodeUpdate(commitInfos);
 
         // 更新 timeStamp
@@ -133,8 +136,8 @@ public class GitUpdate extends KnowledgeExtractor {
         map.put(MESSAGE, message != null ? message : "");
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
-        JSONArray diffInfos = new JSONArray();
         Set<String> parentNames = new HashSet<>();
+        diffInfos.clear();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -158,8 +161,7 @@ public class GitUpdate extends KnowledgeExtractor {
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
             if(diff.equals("")) continue;
-            JSONObject diffList = GitExtractor.splitDiffs(diff);
-            diffInfos.add(diffList);
+            GitExtractor.splitDiffs(diff, diffInfos);
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
         map.put(DIFF_INFO, diffInfos.toString());
@@ -246,7 +248,7 @@ public class GitUpdate extends KnowledgeExtractor {
         CommitInfo gitInfo = new CommitInfo();
         gitInfo.name = (String) map.get(NAME);
         gitInfo.diffSummary = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
-        gitInfo.diffInfo = new JSONArray(Collections.singletonList(map.get(DIFF_INFO)));
+        gitInfo.diffInfo = JSONArray.parseArray((String) map.get(DIFF_INFO));
         gitInfo.parent.addAll(parentNames);
         commitInfos.put(gitInfo.name, gitInfo);
     }
