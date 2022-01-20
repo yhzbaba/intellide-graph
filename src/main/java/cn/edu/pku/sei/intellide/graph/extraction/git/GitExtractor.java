@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
+import com.alibaba.fastjson.JSONArray;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
@@ -13,8 +14,8 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
-import org.json.JSONException;
-import org.json.JSONObject;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
 
@@ -109,7 +110,7 @@ public class GitExtractor extends KnowledgeExtractor {
         map.put(MESSAGE, message != null ? message : "");
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
-        JSONObject diffInfos = new JSONObject(new LinkedHashMap<>());
+        JSONArray diffInfos = new JSONArray();
         Set<String> parentNames = new HashSet<>();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
@@ -130,14 +131,13 @@ public class GitExtractor extends KnowledgeExtractor {
                 df.setRepository(git.getRepository());
                 df.format(diffs.get(k));
                 String diffText = out.toString("UTF-8");
-//                System.out.println(diffText);
                 diff += diffText;
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
             if(diff.equals("")) continue;
             // 对 diff 进行拆分，暂且以文件作为划分依据（diff --git分割）
             JSONObject diffList = splitDiffs(diff);
-            diffInfos.put(commit.getParent(i).getName(), diffList.toString());
+            diffInfos.add(diffList);
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
         map.put(DIFF_INFO, diffInfos.toString());
@@ -177,7 +177,7 @@ public class GitExtractor extends KnowledgeExtractor {
             this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
     }
 
-    private JSONObject splitDiffs(String diff) throws JSONException {
+    public static JSONObject splitDiffs(String diff) throws JSONException {
         JSONObject res = new JSONObject();
         List<String> dg = new ArrayList<>();
         Matcher m = Pattern.compile("diff --git.*\\n").matcher(diff);
@@ -195,7 +195,7 @@ public class GitExtractor extends KnowledgeExtractor {
         return res;
     }
 
-    private String getFilePath(String msg) {
+    public static String getFilePath(String msg) {
         Matcher m = Pattern.compile("a/.*b/").matcher(msg);
         String res = "";
         if(m.find()) {

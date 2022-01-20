@@ -3,7 +3,6 @@ package cn.edu.pku.sei.intellide.graph.extraction.code_mention;
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.git.GitExtractor;
-import cn.edu.pku.sei.intellide.graph.extraction.java.JavaExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.markdown.MdExtractor;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;

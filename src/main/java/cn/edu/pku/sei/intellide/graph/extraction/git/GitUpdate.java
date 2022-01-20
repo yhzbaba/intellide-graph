@@ -1,9 +1,12 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
+import com.alibaba.fastjson.JSONArray;
 import org.eclipse.jgit.api.Git;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.diff.DiffEntry;
+import org.eclipse.jgit.diff.DiffFormatter;
+import org.eclipse.jgit.diff.RawTextComparator;
 import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.ObjectReader;
 import org.eclipse.jgit.lib.PersonIdent;
@@ -11,9 +14,11 @@ import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
+import com.alibaba.fastjson.JSONException;
+import com.alibaba.fastjson.JSONObject;
 import org.neo4j.graphdb.*;
-import org.neo4j.graphdb.factory.GraphDatabaseFactory;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -24,6 +29,7 @@ public class GitUpdate extends KnowledgeExtractor {
     public static final String MESSAGE = "message";
     public static final String COMMIT_TIME = "commitTime";
     public static final String DIFF_SUMMARY = "diffSummary";
+    public static final String DIFF_INFO = "diffInfo";
     public static final Label COMMIT = Label.label("Commit");
     public static final Label TIMESTAMP = Label.label("TimeStamp");
     public static final String EMAIL_ADDRESS = "emailAddress";
@@ -85,6 +91,8 @@ public class GitUpdate extends KnowledgeExtractor {
                     e.printStackTrace();
                 } catch (GitAPIException e) {
                     e.printStackTrace();
+                } catch (JSONException e) {
+                    e.printStackTrace();
                 }
             }
         }
@@ -104,7 +112,6 @@ public class GitUpdate extends KnowledgeExtractor {
         }
 
         // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
-        System.out.println(commitInfos);
         new CodeUpdate(commitInfos);
 
         // 更新 timeStamp
@@ -116,7 +123,7 @@ public class GitUpdate extends KnowledgeExtractor {
      * @throws IOException
      * @throws GitAPIException
      */
-    private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException {
+    private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException, JSONException {
 
 //        System.out.println(commit.getShortMessage());
 
@@ -126,6 +133,7 @@ public class GitUpdate extends KnowledgeExtractor {
         map.put(MESSAGE, message != null ? message : "");
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
+        JSONArray diffInfos = new JSONArray();
         Set<String> parentNames = new HashSet<>();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
@@ -138,11 +146,23 @@ public class GitUpdate extends KnowledgeExtractor {
             CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
             newTreeIter.reset(reader, head);
             List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
+            String diff = "";
             for (int k = 0; k < diffs.size(); k++) {
+                ByteArrayOutputStream out = new ByteArrayOutputStream();
+                DiffFormatter df = new DiffFormatter(out);
+                df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
+                df.setRepository(git.getRepository());
+                df.format(diffs.get(k));
+                String diffText = out.toString("UTF-8");
+                diff += diffText;
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
+            if(diff.equals("")) continue;
+            JSONObject diffList = GitExtractor.splitDiffs(diff);
+            diffInfos.add(diffList);
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
+        map.put(DIFF_INFO, diffInfos.toString());
         // 如果是最新的commit，记录作为 timeStamp
         if(!flag) {
             flag = true;
@@ -225,7 +245,8 @@ public class GitUpdate extends KnowledgeExtractor {
     private void addCommitInfo(Map<String, Object> map, Set<String> parentNames) {
         CommitInfo gitInfo = new CommitInfo();
         gitInfo.name = (String) map.get(NAME);
-        gitInfo.diffInfo = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
+        gitInfo.diffSummary = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
+        gitInfo.diffInfo = new JSONArray(Collections.singletonList(map.get(DIFF_INFO)));
         gitInfo.parent.addAll(parentNames);
         commitInfos.put(gitInfo.name, gitInfo);
     }
@@ -261,7 +282,8 @@ public class GitUpdate extends KnowledgeExtractor {
         /**
          * 每个String是: Change_type oldFilePath to newFilePath 的格式
          */
-        List<String> diffInfo = new ArrayList<>();
+        List<String> diffSummary = new ArrayList<>();
+        JSONArray diffInfo = new JSONArray();
         List<String> parent = new ArrayList<>();
     }
 }
