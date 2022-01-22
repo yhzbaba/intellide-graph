@@ -1,17 +1,13 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
-import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
 import lombok.Getter;
 import lombok.Setter;
-import org.apache.poi.ss.formula.functions.T;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
 import org.eclipse.cdt.internal.core.dom.parser.c.CASTParameterDeclaration;
-import org.json.JSONArray;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
-import org.springframework.boot.SpringApplication;
 
 import java.util.*;
 

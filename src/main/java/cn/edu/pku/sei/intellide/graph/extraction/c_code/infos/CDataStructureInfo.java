@@ -33,10 +33,11 @@ public class CDataStructureInfo {
 
     private BatchInserter inserter;
 
+    public CDataStructureInfo() {}
+
     public CDataStructureInfo(BatchInserter inserter) {
         this.inserter = inserter;
     }
-
 
     public void initEnumFieldInfo() {
         for (IASTNode node: simpleDeclaration.getChildren()) {
