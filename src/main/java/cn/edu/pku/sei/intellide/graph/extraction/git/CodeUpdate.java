@@ -30,18 +30,23 @@ public class CodeUpdate extends KnowledgeExtractor {
     /**
      * 记录修改涉及到的代码信息，每次需要初始化
      */
-    private boolean isGlobalModify = false;
-    private boolean isGlobalAdd = false;
-    private boolean isGlobalDelete = false;
-    private Set<String> changedFunctions = new HashSet<>();
-    private Set<String> renamedFunctions = new HashSet<>();
-    private Set<String> changedMacros = new HashSet<>();
-    private Set<String> changedIncludes = new HashSet<>();
-    private Set<String> changedStructs = new HashSet<>();
+    private List<String> deleteItems = new ArrayList<>();
+    private List<String> addItems = new ArrayList<>();
 
-    /**
-     * 记录修改部分对应图谱中的信息
-     */
+    private Set<String> addIncludes = new HashSet<>();
+    private Set<String> deleteIncludes = new HashSet<>();
+
+    private Set<CVariableInfo> addVariables = new HashSet<>();
+    private Set<CVariableInfo> deleteVariables = new HashSet<>();
+    private Set<CVariableInfo> modifyVariables = new HashSet<>();
+
+    private Set<CDataStructureInfo> addStructs = new HashSet<>();
+    private Set<CDataStructureInfo> deleteStructs = new HashSet<>();
+    private Set<CDataStructureInfo> modifyStructs = new HashSet<>();
+
+    private Set<CFunctionInfo> addFunctions = new HashSet<>();
+    private Set<CFunctionInfo> deleteFunctions = new HashSet<>();
+    private Set<CFunctionInfo> modifyFunctions = new HashSet<>();
 
 
 
@@ -103,10 +108,11 @@ public class CodeUpdate extends KnowledgeExtractor {
     }
 
     private void initDS() {
-        isGlobalModify = false;
-        isGlobalAdd = false;
-        isGlobalDelete = false;
-        changedFunctions.clear();
+        addItems.clear(); deleteItems.clear();
+        addIncludes.clear(); deleteIncludes.clear();
+        addVariables.clear(); deleteVariables.clear(); modifyVariables.clear();
+        addStructs.clear(); deleteStructs.clear(); modifyStructs.clear();
+        addFunctions.clear(); deleteFunctions.clear(); modifyFunctions.clear();
     }
 
     /**
@@ -116,8 +122,6 @@ public class CodeUpdate extends KnowledgeExtractor {
      */
     private void parseCommit(GitUpdate.CommitInfo commitInfo) {
         JSONArray diffInfos = commitInfo.diffInfo;
-        // 初始化用于记录的全局数据结构
-        initDS();
         for(int i = 0;i < diffInfos.size();i++) {
             // 只涉及单个代码文件的 diff 信息
             System.out.println("diffInfos: " + diffInfos.getJSONObject(i));
@@ -129,6 +133,9 @@ public class CodeUpdate extends KnowledgeExtractor {
                 if(!fileName.contains(".c") && !fileName.contains(".h")) {
                     continue;
                 }
+
+                // 初始化用于记录的全局数据结构
+                initDS();
 
                 // 解析 diff 内容，定位文件内部的具体位置
                 parseFileDiff((String) entry.getValue());
@@ -145,14 +152,16 @@ public class CodeUpdate extends KnowledgeExtractor {
 
                 // 获取以该文件为核心的图谱信息（数据库事务执行）
                 CCodeFileInfo graphCodeFileInfo = getGraphCodeFileInfo(fileName);
+
+                // 更新后代码文件与图谱内容对比
+                setDiffInfo(codeFileInfo, graphCodeFileInfo);
             }
         }
     }
 
     /**
-     * 对于单个代码文件的commit diff，利用其中的 @@ 行的内容进行具体的分析定位
-     * 处理的结果，作为下一步访问数据库查询的对象
-     * @param diffs 一个文件所有的diff信息，需要进一步分割
+     * 对于单个代码文件的commit diff，记录删除/新增的代码行内容，用于图谱更新时的判断
+     * @param diffs 一个文件所有的diff信息
      */
     private void parseFileDiff(String diffs) {
         diffs = String.valueOf(diffs.split("\\r?\\\\n"));
@@ -164,39 +173,23 @@ public class CodeUpdate extends KnowledgeExtractor {
         for(int i = 0;i < lines.size();i++) {
             String line = lines.get(i);
             if(line.equals("")) continue;
-//            parseDiffType(deleteLine, addLine, deleteLines, addLines, line);
-            String tmp = "";
             if(line.contains("@@")) {
-                if(line.lastIndexOf("@") == line.length() - 1) {
-                    // 存在全局信息的修改
+                // 处理上一个 diff 片段
+                if(addLine == 0 && deleteLine != 0) {
+                    deleteItems.addAll(deleteLines);
                 }
-                else {
-                    // 非全局修改
-                    tmp = line.substring(line.lastIndexOf("@") + 1);
-                    if(isFunction(tmp)) changedFunctions.add(tmp);
+                else if(addLine != 0 && deleteLine == 0) {
+                    addItems.addAll(addLines);
                 }
+                addLine = 0; deleteLine = 0;
+                addLines.clear(); deleteLines.clear();
             }
-            else {
-                // 非位置信息行
-                if(line.charAt(0) == '+' && line.charAt(1) != '+') {
-                    addLine++; addLines.add(line.substring(1));
-                    if(line.contains("#define")) changedMacros.add(line.substring(line.indexOf("#")));
-                    else if(line.contains("#include")) changedIncludes.add(line.substring(line.indexOf("#")));
-                    else if(line.contains("struct")) changedStructs.add(line.substring(line.indexOf("+") + 1));
-                    else if(isFunction(line)) changedFunctions.add(line.substring(line.indexOf("+") + 1));
-                }
-                else if(line.charAt(0) == '-' && line.charAt(1) != '-') {
-                    deleteLine++; deleteLines.add(line.substring(1));
-                    if(line.contains("#define")) changedMacros.add(line.substring(line.indexOf("#")));
-                    else if(line.contains("#include")) changedIncludes.add(line.substring(line.indexOf("#")));
-                    else if(line.contains("struct")) changedStructs.add(line.substring(line.indexOf("-") + 1));
-                    else if(isFunction(line)) changedFunctions.add(line.substring(line.indexOf("-") + 1));
-                }
-                else {
-                    // 普通代码行
-                    if(isFunction(line)) changedFunctions.add(line);
-                }
-            }
+        }
+        if(addLine == 0 && deleteLine != 0) {
+            deleteItems.addAll(deleteLines);
+        }
+        else if(addLine != 0 && deleteLine == 0) {
+            addItems.addAll(addLines);
         }
     }
 
@@ -344,5 +337,51 @@ public class CodeUpdate extends KnowledgeExtractor {
             ex.printStackTrace();
         }
         return codeFileInfo;
+    }
+
+    /**
+     * 将更新后的代码文件内容与当前图谱内容进行对比，将修改记录在全局数据结构中
+     * 用更新后的代码文件内容去查找图谱
+     * 注：在调用 contains 方法是根据重写的 equals 处理的，需要进一步完善
+     */
+    private void setDiffInfo(CCodeFileInfo codeFileInfo, CCodeFileInfo graphCodeFileInfo) {
+        // include files
+        codeFileInfo.getIncludeCodeFileList().forEach(includeFile ->{
+            // 图谱数据不包含 -> 新增
+            if(!graphCodeFileInfo.getIncludeCodeFileList().contains(includeFile)) {
+                addIncludes.add(includeFile);
+            }
+            else{
+                graphCodeFileInfo.getIncludeCodeFileList().remove(includeFile);
+            }
+        });
+        deleteIncludes.addAll(graphCodeFileInfo.getIncludeCodeFileList());
+
+        // global variables
+        codeFileInfo.getVariableInfoList().forEach(var -> {
+            if(!graphCodeFileInfo.getVariableInfoList().contains(var)) {
+                // add or modify（利用对 diff 的解析确定）
+                // TODO: 如何定位修改的是哪一个变量（diff 内容）
+                addItems.forEach(item -> {
+                    if(item.contains(var.getName())) {
+                        addVariables.add(var);
+                    }
+                    else {
+                        modifyVariables.add(var);
+                    }
+                });
+            }
+            else {
+                graphCodeFileInfo.getVariableInfoList().remove(var);
+            }
+        });
+        // 剩下的是已被删除的 variables
+        deleteVariables.addAll(graphCodeFileInfo.getVariableInfoList());
+
+        // data struct
+
+
+        // functions
+
     }
 }

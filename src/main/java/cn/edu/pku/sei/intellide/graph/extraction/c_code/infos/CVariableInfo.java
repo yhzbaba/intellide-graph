@@ -75,7 +75,7 @@ public class CVariableInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, belongTo);
+        return Objects.hash(name, belongTo, content);
     }
 
     @Override
