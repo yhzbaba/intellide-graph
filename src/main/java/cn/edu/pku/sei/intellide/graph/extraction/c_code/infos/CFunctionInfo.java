@@ -7,10 +7,7 @@ import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class CFunctionInfo {
@@ -141,12 +138,20 @@ public class CFunctionInfo {
 
     @Override
     public int hashCode() {
-        return fullName.hashCode();
+        return Objects.hash(fullName, content, belongTo);
     }
 
     @Override
     public boolean equals(Object obj) {
         CFunctionInfo func = (CFunctionInfo) obj;
-        return this.fullName.equals(func.getFullName());
+        if(callFunctionNameList.size() != func.getCallFunctionNameList().size()) {
+            return false;
+        }
+        for(String f: callFunctionNameList) {
+            if(!func.getCallFunctionNameList().contains(f)) {
+                return false;
+            }
+        }
+        return (fullName.equals(func.getFullName()) && content.equals(func.getContent()) && belongTo.equals(func.getBelongTo()));
     }
 }

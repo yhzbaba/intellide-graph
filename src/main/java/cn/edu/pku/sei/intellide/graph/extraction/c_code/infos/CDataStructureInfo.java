@@ -116,6 +116,14 @@ public class CDataStructureInfo {
     @Override
     public boolean equals(Object obj) {
         CDataStructureInfo ds = (CDataStructureInfo) obj;
+        if(fieldInfoList.size() != ds.getFieldInfoList().size()) {
+            return false;
+        }
+        for(CFieldInfo field: fieldInfoList) {
+            if(!ds.getFieldInfoList().contains(field)) {
+                return false;
+            }
+        }
         return (this.name.equals(ds.getName()) && this.typedefName.equals(ds.getTypedefName()));
     }
 }

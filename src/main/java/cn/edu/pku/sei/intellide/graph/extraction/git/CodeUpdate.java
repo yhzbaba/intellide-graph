@@ -4,15 +4,11 @@ import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.GetTranslationUnitUtil;
-import lombok.experimental.var;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.core.runtime.CoreException;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
-import org.neo4j.graphdb.GraphDatabaseService;
-import org.neo4j.graphdb.Node;
-import org.neo4j.graphdb.Result;
-import org.neo4j.graphdb.Transaction;
+import org.neo4j.graphdb.*;
 
 import java.io.File;
 import java.io.IOException;
@@ -32,6 +28,7 @@ public class CodeUpdate extends KnowledgeExtractor {
      */
     private List<String> deleteItems = new ArrayList<>();
     private List<String> addItems = new ArrayList<>();
+    private List<String> addFuncItems = new ArrayList<>();
 
     private Set<String> addIncludes = new HashSet<>();
     private Set<String> deleteIncludes = new HashSet<>();
@@ -51,6 +48,8 @@ public class CodeUpdate extends KnowledgeExtractor {
 
 
     public static void main(String[] args) {
+        String s = "static PerfConfigAttr g_recordAttr;";
+        System.out.println(s.replace("g_recordAttr", ""));
         /*
         一个 diffInfo 的示例：
 
@@ -108,7 +107,7 @@ public class CodeUpdate extends KnowledgeExtractor {
     }
 
     private void initDS() {
-        addItems.clear(); deleteItems.clear();
+        addItems.clear(); deleteItems.clear(); addFuncItems.clear();
         addIncludes.clear(); deleteIncludes.clear();
         addVariables.clear(); deleteVariables.clear(); modifyVariables.clear();
         addStructs.clear(); deleteStructs.clear(); modifyStructs.clear();
@@ -155,6 +154,9 @@ public class CodeUpdate extends KnowledgeExtractor {
 
                 // 更新后代码文件与图谱内容对比
                 setDiffInfo(codeFileInfo, graphCodeFileInfo);
+
+                // 执行数据库事务，更新图谱内容
+                updateGraph(fileName);
             }
         }
     }
@@ -179,7 +181,14 @@ public class CodeUpdate extends KnowledgeExtractor {
                     deleteItems.addAll(deleteLines);
                 }
                 else if(addLine != 0 && deleteLine == 0) {
-                    addItems.addAll(addLines);
+                    for(String item: addLines) {
+                        if(isFunction(item)) {
+                            addFuncItems.add(item);
+                        }
+                        else {
+                            addItems.add(item);
+                        }
+                    }
                 }
                 addLine = 0; deleteLine = 0;
                 addLines.clear(); deleteLines.clear();
@@ -361,15 +370,14 @@ public class CodeUpdate extends KnowledgeExtractor {
         codeFileInfo.getVariableInfoList().forEach(var -> {
             if(!graphCodeFileInfo.getVariableInfoList().contains(var)) {
                 // add or modify（利用对 diff 的解析确定）
-                // TODO: 如何定位修改的是哪一个变量（diff 内容）
-                addItems.forEach(item -> {
+                boolean flag = false;
+                for(String item: addItems) {
                     if(item.contains(var.getName())) {
                         addVariables.add(var);
+                        flag = true; break;
                     }
-                    else {
-                        modifyVariables.add(var);
-                    }
-                });
+                }
+                if(!flag) modifyVariables.add(var);
             }
             else {
                 graphCodeFileInfo.getVariableInfoList().remove(var);
@@ -379,9 +387,171 @@ public class CodeUpdate extends KnowledgeExtractor {
         deleteVariables.addAll(graphCodeFileInfo.getVariableInfoList());
 
         // data struct
-
+        codeFileInfo.getDataStructureList().forEach(ds -> {
+            if(!graphCodeFileInfo.getDataStructureList().contains(ds)) {
+                boolean flag = false;
+                for(String item: addItems) {
+                    if(item.contains(ds.getName()) || item.contains(ds.getTypedefName())) {
+                        addStructs.add(ds);
+                        flag = true; break;
+                    }
+                }
+                if(!flag) modifyStructs.add(ds);
+            }
+            else {
+                graphCodeFileInfo.getDataStructureList().remove(ds);
+            }
+        });
+        deleteStructs.addAll(graphCodeFileInfo.getDataStructureList());
 
         // functions
+        // 需要正则匹配来识别新增定义的函数-addFuncItems
+        codeFileInfo.getFunctionInfoList().forEach(func -> {
+           if(!graphCodeFileInfo.getFunctionInfoList().contains(func)) {
+               boolean flag = false;
+               for(String item: addFuncItems) {
+                   if(item.contains(func.getName())) {
+                       addFunctions.add(func);
+                       flag = true; break;
+                   }
+               }
+               if(!flag) {
+                   modifyFunctions.add(func);
+               }
+           }
+           else {
+               graphCodeFileInfo.getFunctionInfoList().remove(func);
+           }
+        });
+        deleteFunctions.addAll(graphCodeFileInfo.getFunctionInfoList());
+    }
 
+    /**
+     * 依据全局记录的数据结构，对图谱内容进行更新
+     */
+    private void updateGraph(String fileName) throws QueryExecutionException {
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            // include files
+            addIncludes.forEach(file -> {
+                String cql = "match (n:c_code_file{fileName: '" + fileName + "'}) " +
+                        "match (m:c_code_file{fileName: '" + file + "'}) " +
+                        "create (n) -[:include]-> (m)";
+                db.execute(cql);
+            });
+            deleteIncludes.forEach(file -> {
+                String cql = "match (n:c_code_file{fileName: '" + fileName + "'}) " +
+                        "-[r:include]-> (m:c_code_file{fileName: '" + file + "'}) " +
+                        "delete r";
+                db.execute(cql);
+            });
+
+            // variables
+            addVariables.forEach(var -> {
+                Node node = db.createNode(CExtractor.c_variable);
+                node.setProperty("name", var.getName());
+                node.setProperty("content", var.getContent());
+                node.setProperty("belongTo", var.getBelongTo());
+                node.setProperty("isDefine", var.getIsDefine());
+                node.setProperty("isStructVariable", var.getIsStructVariable());
+            });
+            deleteVariables.forEach(var -> {
+                String cql = "match (n:c_variable{name:'" + var.getName() + "'})" +
+                        "detach delete n";
+                db.execute(cql);
+            });
+            modifyVariables.forEach(var -> {
+               Node node = db.findNode(CExtractor.c_variable, "name", var.getName());
+               if(node != null) {
+                   // 非更名操作，使用 name 查询匹配
+                   node.setProperty("content", var.getContent());
+                   node.setProperty("belongTo", var.getBelongTo());
+                   node.setProperty("isDefine", var.getIsDefine());
+                   node.setProperty("isStructVariable", var.getIsStructVariable());
+               }
+               else {
+                   // 更名操作，需要匹配原节点
+                   String tmp = var.getContent();
+                   tmp.replace(var.getName(), "");
+                   String cql = "match (n:c_variable) where n.belongTo = '" + var.getBelongTo() + "' and " +
+                           "n.content contains '" + tmp + "' return n";
+                   Result res = db.execute(cql);
+                   // TODO: 也有可能存在返回多个节点的情况
+                   if(res.hasNext()) {
+                       Map<String, Object> row = res.next();
+                       for(String key: res.columns()) {
+                           Node n = (Node) row.get(key);
+                           n.setProperty("name", var.getName());
+                           n.setProperty("content", var.getContent());
+                       }
+                   }
+
+               }
+            });
+
+            // dataStructures
+            // TODO: 目前看来和 variable 是完全相同的处理，先跳过这部分
+
+            // functions
+            addFunctions.forEach(func -> {
+               Node node = db.createNode(CExtractor.c_function);
+               node.setProperty("name", func.getName());
+               node.setProperty("content", func.getContent());
+               node.setProperty("fullName", func.getFullName());
+               node.setProperty("belongTo", func.getBelongTo());
+               node.setProperty("fullParams", func.getFullParams());
+               node.setProperty("isInline", func.getIsInline());
+               node.setProperty("isConst", func.getIsConst());
+               node.setProperty("isDefine", func.getIsDefine());
+               node.setProperty("belongToName", func.getBelongToName());
+            });
+            deleteFunctions.forEach(func -> {
+                String cql = "match (n:c_function{name:'" + func.getFullName() + "'})" +
+                        "detach delete n";
+                db.execute(cql);
+            });
+            modifyFunctions.forEach(func -> {
+                Node node = db.findNode(CExtractor.c_function, "fullName", func.getFullName());
+                if(node != null) {
+                    // 非更名操作
+                    node.setProperty("name", func.getName());
+                    node.setProperty("content", func.getContent());
+                    node.setProperty("fullName", func.getFullName());
+                    node.setProperty("belongTo", func.getBelongTo());
+                    node.setProperty("fullParams", func.getFullParams());
+                    node.setProperty("isInline", func.getIsInline());
+                    node.setProperty("isConst", func.getIsConst());
+                    node.setProperty("isDefine", func.getIsDefine());
+                    node.setProperty("belongToName", func.getBelongToName());
+                }
+                else {
+                    // 更名操作，需要匹配原节点
+                    String tmp = func.getContent();
+                    tmp.replace(func.getName(), "");
+                    // TODO: 匹配属性可能不足够（也许引入参数列表）
+                    String cql = "match (n:c_function) where n.belongTo = '" + func.getBelongTo() + "' and " +
+                            "n.isInline = '" + func.getIsInline() + "' and" +
+                            "n.isConst = '" + func.getIsConst() + "' and" +
+                            "n.isDefine = '" + func.getIsDefine() + "' and" +
+                            "n.fullName contains '" + tmp + "' return n";
+                    Result res = db.execute(cql);
+                    // TODO: 也有可能存在返回多个节点的情况
+                    if(res.hasNext()) {
+                        Map<String, Object> row = res.next();
+                        for(String key: res.columns()) {
+                            Node n = (Node) row.get(key);
+                            n.setProperty("name", func.getName());
+                            n.setProperty("fullName", func.getFullName());
+                            n.setProperty("belongToName", func.getBelongToName());
+                        }
+                    }
+
+                }
+            });
+
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 }
