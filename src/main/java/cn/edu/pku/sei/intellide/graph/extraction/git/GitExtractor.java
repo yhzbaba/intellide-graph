@@ -179,6 +179,9 @@ public class GitExtractor extends KnowledgeExtractor {
             this.getInserter().createRelationship(commitNodeId, personMap.get(personStr), COMMITTER, new HashMap<>());
     }
 
+    /**
+     * 以文件为key值，对单个commit的内容进行分割
+     */
     public static void splitDiffs(String diff, JSONArray diffInfos) throws JSONException {
         List<String> dg = new ArrayList<>();
         Matcher m = Pattern.compile("diff --git.*\\n").matcher(diff);

@@ -48,8 +48,7 @@ public class CodeUpdate extends KnowledgeExtractor {
 
 
     public static void main(String[] args) {
-        String s = "static PerfConfigAttr g_recordAttr;";
-        System.out.println(s.replace("g_recordAttr", ""));
+
         /*
         一个 diffInfo 的示例：
 
@@ -136,14 +135,11 @@ public class CodeUpdate extends KnowledgeExtractor {
                 // 初始化用于记录的全局数据结构
                 initDS();
 
-                // 解析 diff 内容，定位文件内部的具体位置
+                // 解析 diff 内容，记录修改相关的信息
                 parseFileDiff((String) entry.getValue());
-
 
                 // 获取修改文件的绝对路径(需要添加项目代码路径作为前缀来进行定位)
                 String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\kernel_liteos_a\\" + fileName;
-
-                // 后续步骤：获取图谱信息：解析代码文件；集合比对
 
                 // 解析被修改的代码文件
                 CCodeFileInfo codeFileInfo = getCodeFileInfo(filePath, fileName);
@@ -156,7 +152,7 @@ public class CodeUpdate extends KnowledgeExtractor {
                 setDiffInfo(codeFileInfo, graphCodeFileInfo);
 
                 // 执行数据库事务，更新图谱内容
-                updateGraph(fileName);
+                updateGraph(fileName, graphCodeFileInfo);
             }
         }
     }
@@ -193,6 +189,16 @@ public class CodeUpdate extends KnowledgeExtractor {
                 addLine = 0; deleteLine = 0;
                 addLines.clear(); deleteLines.clear();
             }
+            else {
+                if(line.length() > 1) {
+                    if(line.charAt(0) == '+' && line.charAt(1) != '+') {
+                        addLines.add(line);
+                    }
+                    else if(line.charAt(0) == '-' && line.charAt(1) != '-') {
+                        deleteLines.add(line);
+                    }
+                }
+            }
         }
         if(addLine == 0 && deleteLine != 0) {
             deleteItems.addAll(deleteLines);
@@ -204,14 +210,17 @@ public class CodeUpdate extends KnowledgeExtractor {
 
     /**
      * 判断修改内容是否与函数定义相关
-     * TODO: 没有考虑声明的情况(仅有参数类型)
-     * @param line
+     * 函数声明/定义的格式
      * @return
      */
     private boolean isFunction(String line) {
-        Pattern r = Pattern.compile("\\s*\\w+\\s+\\w+\\(\\w+\\s\\w+.*");
+        Pattern r = Pattern.compile("\\s*\\w+\\s\\w+\\(\\w+\\s\\w+.*");
         Matcher m = r.matcher(line);
-        return m.find();
+        boolean f1 = m.find();
+        r = Pattern.compile("\\s*\\w+\\s\\w+\\([^\\)]*\\)");
+        m = r.matcher(line);
+        boolean f2 = m.find();
+        return f1 || f2;
     }
 
     /**
@@ -236,7 +245,7 @@ public class CodeUpdate extends KnowledgeExtractor {
      * 访问数据库，获取代码文件相关联的各列表信息
      * @param fileName 项目根目录下的文件路径，用于实体唯一匹配
      */
-    private CCodeFileInfo getGraphCodeFileInfo(String fileName) {
+    private CCodeFileInfo getGraphCodeFileInfo(String fileName) throws QueryExecutionException {
         CCodeFileInfo codeFileInfo = new CCodeFileInfo(fileName);
         String query = "";
         Map<String, Object> properties = new HashMap<>();
@@ -429,7 +438,7 @@ public class CodeUpdate extends KnowledgeExtractor {
     /**
      * 依据全局记录的数据结构，对图谱内容进行更新
      */
-    private void updateGraph(String fileName) throws QueryExecutionException {
+    private void updateGraph(String fileName, CCodeFileInfo codeFileInfo) throws QueryExecutionException {
         GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
             // include files
@@ -510,6 +519,7 @@ public class CodeUpdate extends KnowledgeExtractor {
                         "detach delete n";
                 db.execute(cql);
             });
+
             modifyFunctions.forEach(func -> {
                 Node node = db.findNode(CExtractor.c_function, "fullName", func.getFullName());
                 if(node != null) {
@@ -523,6 +533,32 @@ public class CodeUpdate extends KnowledgeExtractor {
                     node.setProperty("isConst", func.getIsConst());
                     node.setProperty("isDefine", func.getIsDefine());
                     node.setProperty("belongToName", func.getBelongToName());
+                    // 需要考虑调用函数列表的修改
+                    List<String> invokeFunctions = func.getCallFunctionNameList();
+                    List<String> prevInvokeFunctions = new ArrayList<>();
+                    for(CFunctionInfo prevFunc: codeFileInfo.getFunctionInfoList()) {
+                        if(prevFunc.getName().equals(func.getName())) {
+                            prevInvokeFunctions = prevFunc.getCallFunctionNameList();
+                        }
+                    }
+                    for(String invokeFunc: invokeFunctions) {
+                        if(prevInvokeFunctions.contains(invokeFunc)) {
+                            prevInvokeFunctions.remove(invokeFunc);
+                        }
+                        else {
+                            // 新增的函数调用
+                            String cql = "match (n:c_function{name:'" + func.getName() + "'})" +
+                                    "match (m:c_function{name:'" + invokeFunc + "'})" +
+                                    "create (n)-[:invoke]->(m)";
+                            db.execute(cql);
+                        }
+                    }
+                    // 删除的函数调用
+                    for(String prevFunc: prevInvokeFunctions) {
+                        String cql = "match (n:c_function{name:'" + func.getName() + "'})" +
+                                " -[r:invoke]-> (m:c_function{name:'" + prevFunc + "'}) return r";
+                        db.execute(cql);
+                    }
                 }
                 else {
                     // 更名操作，需要匹配原节点
