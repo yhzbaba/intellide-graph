@@ -145,8 +145,11 @@ public class CodeUpdate extends KnowledgeExtractor {
                 CCodeFileInfo codeFileInfo = getCodeFileInfo(filePath, fileName);
                 codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
 
+                // HACK 项目名称
+                filePath = "kernel_lite_os\\" + fileName;
+
                 // 获取以该文件为核心的图谱信息（数据库事务执行）
-                CCodeFileInfo graphCodeFileInfo = getGraphCodeFileInfo(fileName);
+                CCodeFileInfo graphCodeFileInfo = getGraphCodeFileInfo(filePath, fileName);
 
                 // 更新后代码文件与图谱内容对比
                 setDiffInfo(codeFileInfo, graphCodeFileInfo);
@@ -238,15 +241,15 @@ public class CodeUpdate extends KnowledgeExtractor {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return new CCodeFileInfo(fileName, translationUnit);
+        return new CCodeFileInfo(filePath, fileName, translationUnit);
     }
 
     /**
      * 访问数据库，获取代码文件相关联的各列表信息
      * @param fileName 项目根目录下的文件路径，用于实体唯一匹配
      */
-    private CCodeFileInfo getGraphCodeFileInfo(String fileName) throws QueryExecutionException {
-        CCodeFileInfo codeFileInfo = new CCodeFileInfo(fileName);
+    private CCodeFileInfo getGraphCodeFileInfo(String filePath, String fileName) throws QueryExecutionException {
+        CCodeFileInfo codeFileInfo = new CCodeFileInfo(filePath, fileName);
         String query = "";
         Map<String, Object> properties = new HashMap<>();
         GraphDatabaseService db = this.getDb();
@@ -499,7 +502,7 @@ public class CodeUpdate extends KnowledgeExtractor {
             });
 
             // dataStructures
-            // TODO: 目前看来和 variable 是完全相同的处理，先跳过这部分
+            // TODO: 目前看来和 variable 基本是相同的处理，先跳过这部分
 
             // functions
             addFunctions.forEach(func -> {

@@ -17,6 +17,8 @@ public class CCodeFileInfo {
     @Getter
     private String fileName;
     @Getter
+    private String fileFullName;
+    @Getter
     private IASTTranslationUnit unit;
     @Getter
     @Setter
@@ -33,12 +35,14 @@ public class CCodeFileInfo {
 
     private BatchInserter inserter = null;
 
-    public CCodeFileInfo(String fileName) {
+    public CCodeFileInfo(String fileFullName, String fileName) {
+        this.fileFullName = fileFullName;
         this.fileName = fileName;
     }
 
-    public CCodeFileInfo(String fileName, IASTTranslationUnit unit) {
+    public CCodeFileInfo(String fileFullName, String fileName, IASTTranslationUnit unit) {
         this.fileName = fileName;
+        this.fileFullName = fileFullName;
         this.unit = unit;
         this.initFunctions();
         this.initDataStructures();
@@ -46,8 +50,9 @@ public class CCodeFileInfo {
         this.initIncludeCodeFiles();
     }
 
-    public CCodeFileInfo(BatchInserter inserter, String fileName, IASTTranslationUnit unit) {
+    public CCodeFileInfo(BatchInserter inserter, String fileFullName, String fileName, IASTTranslationUnit unit) {
         this.fileName = fileName;
+        this.fileFullName = fileFullName;
         this.unit = unit;
         this.inserter = inserter;
         this.initFunctions();
@@ -71,8 +76,8 @@ public class CCodeFileInfo {
                 String fullFunctionName = declarator.getRawSignature();
                 functionInfo.setFullName(fullFunctionName);
                 functionInfo.setContent(functionDefinition.getBody().getRawSignature());
-                functionInfo.setBelongTo(fileName);
-                functionInfo.setBelongToName(fileName + functionName);
+                functionInfo.setBelongTo(fileFullName);
+                functionInfo.setBelongToName(fileName + "\\" + functionName);
                 for (IASTNode child : declarator.getChildren()) {
                     if(child instanceof CASTParameterDeclaration) {
                         CASTParameterDeclaration childP = (CASTParameterDeclaration)child;
@@ -240,12 +245,6 @@ public class CCodeFileInfo {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.FILENAME, fileName);
-//        JSONArray ja = new JSONArray();
-//        getFunctionInfoList().forEach(func -> {
-//            if(!func.getFullName().equals(""))
-//                ja.put(func.toString());
-//        });
-//        map.put(CExtractor.FUNCTIONLIST, ja.toString());
         id = inserter.createNode(map, CExtractor.c_code_file);
         return id;
     }

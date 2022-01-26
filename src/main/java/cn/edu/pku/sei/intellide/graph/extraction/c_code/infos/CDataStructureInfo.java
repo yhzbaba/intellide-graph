@@ -104,7 +104,7 @@ public class CDataStructureInfo {
         map.put(CExtractor.CONTENT, content);
         map.put(CExtractor.TYPEDEFNAME, typedefName);
         map.put(CExtractor.ISENUM, isEnum);
-        id = inserter.createNode(map, CExtractor.c_field);
+        id = inserter.createNode(map, CExtractor.c_struct);
         return id;
     }
 

@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CCodeFileInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CProjectInfo;
 
@@ -10,10 +11,7 @@ import org.neo4j.graphdb.RelationshipType;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.*;
 
 public class CExtractor extends KnowledgeExtractor {
     public static final Label c_alias = Label.label("c_alias");
@@ -52,9 +50,9 @@ public class CExtractor extends KnowledgeExtractor {
         CProjectInfo projectInfo = new CProjectInfo();
         BatchInserter inserter = this.getInserter();
         try {
-            // 完成创建节点的工作
+            /* 完成创建节点的工作 */
             projectInfo.makeTranslationUnits(this.getDataDir(), inserter);
-            // 创建节点之间的关系
+            /* 创建节点之间的关系 */
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
                 cCodeFileInfo.getIncludeCodeFileList().forEach(key -> {
                     if(projectInfo.getCodeFileInfoMap().containsKey(key)) {
@@ -68,7 +66,6 @@ public class CExtractor extends KnowledgeExtractor {
                 cCodeFileInfo.getDataStructureList().forEach(cDataStructureInfo -> {
                     inserter.createRelationship(cCodeFileInfo.getId(), cDataStructureInfo.getId(), CExtractor.define, new HashMap<>());
                     cDataStructureInfo.getFieldInfoList().forEach(cFieldInfo -> {
-                        //bug: 相同节点连边会创建多次
                         inserter.createRelationship(cFieldInfo.getId(), cDataStructureInfo.getId(), CExtractor.member_of, new HashMap<>());
                     });
                 });
@@ -79,43 +76,21 @@ public class CExtractor extends KnowledgeExtractor {
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
                 cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
-                    List<String> newFilter = new ArrayList<>();
-                    List<String> old = cFunctionInfo.getCallFunctionNameList();
-                    assert old != null;
-                    for (String s : old) {
-                        // #include "include/abcd.h" 完整路径
-                        // 看类图挨个处理
-                        List<CFunctionInfo> tempList = getFunctionFromName(projectInfo, s);
-                        if(tempList.size() > 1) {
-                            List<String> includeCodeFileList = cCodeFileInfo.getIncludeCodeFileList();
-//                            System.out.println(includeCodeFileList);
-                            for (CFunctionInfo info : tempList) {
-                                if (cFunctionInfo.getBelongTo().equals(info.getBelongTo())) {
-                                    // (2)
-                                    newFilter.add(info.getBelongTo() + s);
-                                } else {
-                                    for (String includeFileName : includeCodeFileList) {
-                                        if(includeFileName.contains(info.getBelongTo())) {
-                                            // (1)
-                                            newFilter.add(info.getBelongTo() + s);
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (tempList.size() == 1) {
-                            // 只查到了一个那就直接扔进去 不然也没啥意义了
-                            newFilter.add(cFunctionInfo.getBelongTo() + s);
+                    /* 对函数调用的每一个函数查询其所属信息 */
+                    Set<CFunctionInfo> invokeFunctions = new HashSet<>();
+                    cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
+                        CFunctionInfo result = getCalledFunction(projectInfo, cCodeFileInfo, callFunc);
+                        if (result.getId() != -1) {
+                            invokeFunctions.add(result);
                         }
-                    }
-//                    System.out.println("filter: " + newFilter);
-                    cFunctionInfo.setCallFunctionNameList(newFilter);
-                });
-                cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
-                    cFunctionInfo.getCallFunctionNameList().forEach(name -> {
-                        // 查找函数修改后不需要这里的判断
-                        CFunctionInfo tmp = getCalledFunction(projectInfo, name);
-                        if(tmp.getId() != -1)
-                            inserter.createRelationship(cFunctionInfo.getId(), tmp.getId(), CExtractor.invoke, new HashMap<>());
+                    });
+                    // FIXME 函数调用查询
+                    /*
+                        match (n:c_function{name:'AllocLowestProcessFd'})-[:invoke]->(m:c_function) return m;
+                        该查询得到的子图中存在没有显式调用关系的连边
+                     */
+                    invokeFunctions.forEach(invokeFunc -> {
+                        inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
                     });
                 });
             });
@@ -124,34 +99,35 @@ public class CExtractor extends KnowledgeExtractor {
         } catch (CoreException e) {
             e.printStackTrace();
         }
-
     }
 
     /**
-     * 下面的两个查找方法尚待修改（增加路径信息）
+     * 确定唯一被调用的函数对象
      */
-
-    private List<CFunctionInfo> getFunctionFromName(CProjectInfo projectInfo, String name) {
-        List<CFunctionInfo> res = new ArrayList<>();
-        projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-            cCodeFileInfo.getFunctionInfoList().forEach(func -> {
-                if(func.getFullName().contains(name)) {
-                    res.add(func);
-                }
-            });
-        });
-        return res;
-    }
-
-    private CFunctionInfo getCalledFunction(CProjectInfo projectInfo, String name) {
+    private CFunctionInfo getCalledFunction(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
         CFunctionInfo res = new CFunctionInfo();
-        projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-            cCodeFileInfo.getFunctionInfoList().forEach(func -> {
-                if(name.contains(func.getName()) || func.getName().contains(name)) {
-                    res.setFunc(func);
+        /* 调用文件内的函数 */
+        for(CFunctionInfo func: cCodeFileInfo.getFunctionInfoList()) {
+            if(func.getName().equals(name) || func.getFullName().contains(name)) {
+                res.setFunc(func);
+                break;
+            }
+        }
+        /* 调用外部 include 文件的函数 */
+        if(res == null) {
+            List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
+            boolean flag = false;
+            for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
+                if(flag) break;
+                if (!includeFiles.contains(codeFileInfo.getFileName())) continue;
+                for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
+                    if (func.getName().equals(name) || func.getFullName().contains(name)) {
+                        res.setFunc(func);
+                        flag = true; break;
+                    }
                 }
-            });
-        });
+            }
+        }
         return res;
     }
 }

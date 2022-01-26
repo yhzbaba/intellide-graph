@@ -106,11 +106,14 @@ public class CFunctionInfo {
             }
             List<String> filtered = finalResult.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
 //            System.out.println(name + "函数的调用情况: " + filtered);
-            setCallFunctionNameList(filtered);
+            /* 调用函数去重 */
+            Set<String> set = new HashSet<>(filtered);
+            setCallFunctionNameList(new ArrayList<>(set));
         }
     }
 
     public void setFunc(CFunctionInfo func) {
+        id = func.getId();
         name = func.getName();
         content = func.getContent();
         fullName = func.getFullName();
@@ -132,8 +135,8 @@ public class CFunctionInfo {
         map.put(CExtractor.ISINLINE, isInline);
         map.put(CExtractor.ISCONST, isConst);
         map.put(CExtractor.ISDEFINE, isDefine);
-        id = inserter.createNode(map, CExtractor.c_function);
-        return id;
+        this.id = inserter.createNode(map, CExtractor.c_function);
+        return this.id;
     }
 
     @Override

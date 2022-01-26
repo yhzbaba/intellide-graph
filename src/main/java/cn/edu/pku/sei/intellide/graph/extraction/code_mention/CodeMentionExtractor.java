@@ -32,11 +32,6 @@ import java.util.regex.Pattern;
 
 /**
  * 建立代码实体和其它类型的实体之间的关联关系
- * detectCodeMentionInFlossDocuments: 建立英文文档和代码之间的关联关系
- * detectCodeMentionInDocx: 建立中文文档和代码之间的关联关系（文档里面提到了这个代码）
- * detectCodeMentionInDiff: 建立commits和代码之间的关联关系（add, modify, delete）
- * <p>
- * Preconditions: 已经运行过CodeTokenizer了。
  */
 
 public class CodeMentionExtractor extends KnowledgeExtractor {
