@@ -124,7 +124,7 @@ public class MdExtractor extends KnowledgeExtractor {
         ++curLine;
         while(curLine < lineNum) {
             String line = lines.get(++curLine);
-            if((line.equals("") || line.contains("**图") || line.contains("![]"))) continue;
+            if((line.equals("") || line.contains("**图") || line.contains("**Figure") || line.contains("![]"))) continue;
             if(line.contains(".md)**")) {
                 // 跳转链接
                 String linkDoc = line.substring(line.indexOf("[") + 1, line.indexOf("]"));
@@ -148,7 +148,7 @@ public class MdExtractor extends KnowledgeExtractor {
     }
 
     public boolean TextFilter(String line) {
-        return (line.equals("") || line.contains("-   ") || line.contains("**图") || line.contains("![]"));
+        return (line.equals("") || line.contains("-   ") || line.contains("**图") || line.contains("**Figure") || line.contains("![]"));
     }
 
     public void codeBelow(List<String> lines) {
@@ -168,13 +168,13 @@ public class MdExtractor extends KnowledgeExtractor {
         if(line.contains("## ")) {
             parseTitle(line, lines, map); flag = true;
         }
-        else if(line.contains("**表") || line.contains("=\"table")) {
+        else if(line.contains("**表") || line.contains("**Table ") || line.contains("=\"table")) {
             parseTable(line, lines, map); flag = true;
         }
         else if(line.contains("```")) {
             parseCodeBlock(line, lines, map); flag = true;
         }
-        else if(line.contains("**说明：**") || line.contains("**须知：**")) {
+        else if(line.contains("**说明：**") || line.contains("**须知：**") || line.contains("**NOTE:**") || line.contains("**CAUTION:**")) {
             parseQuote(line, lines, map); flag = true;
         }
         else if(TextFilter(line)) {
@@ -207,7 +207,7 @@ public class MdExtractor extends KnowledgeExtractor {
 
     public void parseTable(String line, List<String> lines, Map<String, MdSection> map) throws IOException {
         String tbName = "";
-        if(line.contains("**表")) tbName = line.substring(line.lastIndexOf(" "));
+        if(line.contains("**表") || line.contains("**Table ")) tbName = line.substring(line.lastIndexOf(" "));
         else tbName = "table";
         String pattern1 = ".*</a><span>.*</span>(</strong>)?</p>.*";
         String pattern2 = ".*</a>.*</p>.*";
@@ -276,7 +276,7 @@ public class MdExtractor extends KnowledgeExtractor {
     }
 
     public void parseQuote(String line, List<String> lines, Map<String, MdSection> map) {
-        String tmp = line.substring(line.lastIndexOf("：")-2, line.lastIndexOf("：") + 1);
+        String tmp = line.substring(line.lastIndexOf(":")-2, line.lastIndexOf(":") + 1);
         Entities.get(curLevel).content += (tmp + "\n");
         while(curLine < lineNum && !(line = lines.get(++curLine)).equals("") && line.charAt(0) == '>') {
             if(line.equals(">```")) {
@@ -328,7 +328,7 @@ public class MdExtractor extends KnowledgeExtractor {
             map.put(MdExtractor.ISCATALOG, isCatalog);
             map.put(MdExtractor.ISSECTION, isSection);
             map.put(MdExtractor.LEVEL, level);
-            map.put(MdExtractor.CONTENT, content.toString());
+            map.put(MdExtractor.CONTENT, content);
             map.put(MdExtractor.CODEBLOCK, codeBlock.toString());
             map.put(MdExtractor.TABLE, table.toString());
             map.put(MdExtractor.LINKDOCS, linkDocs.toString());

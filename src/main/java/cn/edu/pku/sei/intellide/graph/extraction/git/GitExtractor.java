@@ -50,9 +50,14 @@ public class GitExtractor extends KnowledgeExtractor {
     static JSONArray diffInfos = new JSONArray();
 
     public static void main(String[] args) {
-        GitExtractor test = new GitExtractor();
-        test.setDataDir("E:\\changwenhui\\SoftwareReuse\\knowledgeGraph\\openHarmony\\kernel_liteos_a\\.git");
-        test.extraction();
+//        GitExtractor test = new GitExtractor();
+//        test.setDataDir("E:\\changwenhui\\SoftwareReuse\\knowledgeGraph\\openHarmony\\kernel_liteos_a\\.git");
+//        test.extraction();
+        String s = "lite\\kernel\\file\\conmd.d";
+        if(s.contains("\\")) {
+            s = s.replaceAll("\\\\", "/");
+        }
+        System.out.println(s);
     }
 
     @Override
@@ -75,17 +80,17 @@ public class GitExtractor extends KnowledgeExtractor {
             Git git = new Git(repository);
             Iterable<RevCommit> commits = null;
             try {
-//                commits = git.log().call();
-                commits = git.log().setMaxCount(100).call();
+                commits = git.log().call();
+//                commits = git.log().setMaxCount(100).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
             // 只取50条记录，同时最新的10条记录用于update阶段
             int cnt = 0;
             for (RevCommit commit : commits) {
-                if(cnt < 30) {
-                    cnt++; continue;
-                }
+//                if(cnt < 30) {
+//                    cnt++; continue;
+//                }
                 try {
                     parseCommit(commit, repository, git);
                 } catch (IOException e) {

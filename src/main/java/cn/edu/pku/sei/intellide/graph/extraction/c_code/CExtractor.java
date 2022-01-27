@@ -39,6 +39,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final String ISCONST = "isConst";
     public static final String ISDEFINE = "isDefine";
     public static final String ISSTRUCTVARIABLE = "isStructVariable";
+    public static final String FILEFULLNAME = "fileFullName";
 
     @Override
     public boolean isBatchInsert() {

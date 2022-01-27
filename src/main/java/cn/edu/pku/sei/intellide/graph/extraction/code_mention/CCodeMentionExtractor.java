@@ -4,6 +4,8 @@ import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.git.GitExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.markdown.MdExtractor;
+import com.alibaba.fastjson.JSONArray;
+import com.alibaba.fastjson.JSONObject;
 import org.apache.lucene.analysis.Analyzer;
 import org.apache.lucene.analysis.standard.StandardAnalyzer;
 import org.apache.lucene.document.Document;
@@ -36,25 +38,182 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
     public static final RelationshipType MODIFY = RelationshipType.withName("modify");
     public static final RelationshipType DELETE = RelationshipType.withName("delete");
 
+    Map<Long, List<Long>> edges = new HashMap<>();
+    Map<Long, Set<String>> contentMap = new HashMap<>();
+    Map<Long, String> codeblockMap = new HashMap<>();
+    Map<Long, String> tableMap = new HashMap<>();
+
+    public static void main(String[] args) {
+        String content = " OpenHarmony ketructur **edge** ree is a  **/Vno_de**  structure, ";
+        Pattern r = Pattern.compile("\\s\\*\\*[/\\w]*\\*\\*\\s");
+        Matcher m = r.matcher(content);
+        while(m.find()) {
+            String s = m.group();
+            s = s.replaceAll("\\*", "");
+            s = s.replaceAll("/", "");
+            System.out.println(s);
+        }
+    }
+
     @Override
     public void extraction() {
-        try {
-            this.detectCodeMentionInMd();
-        } catch (IOException | ParseException e) {
-            e.printStackTrace();
-        }
+//        try {
+//            this.detectCodeMentionInMd();
+//        } catch (IOException | ParseException e) {
+//            e.printStackTrace();
+//        }
+        /* code_mention in markdown documents */
+        detectCodeMentionInDoc();
+        /* code_mention in Diff */
         this.detectCodeMentionInDiff();
+    }
+
+    private void detectCodeMentionInDoc() {
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            ResourceIterator<Node> docNodes = db.findNodes(MdExtractor.MARKDOWNSECTION);
+            while(docNodes.hasNext()) {
+                Set<String> set = new HashSet<>();
+                Node docNode = docNodes.next();
+                /* node id 作为 key 值 */
+                long id = docNode.getId();
+                /* 识别 content 中的代码元素，加入集合 */
+                String content = (String) docNode.getProperty(MdExtractor.CONTENT);
+                Pattern r = Pattern.compile("\\s\\*\\*[/\\w]*\\*\\*\\s");
+                Matcher m = r.matcher(content);
+                while(m.find()) {
+                    String s = m.group();
+                    s = s.replaceAll("\\*", "");
+                    s = s.replaceAll("/", "");
+                    set.add(s);
+                }
+                contentMap.put(id, set);
+
+                /* 代码块 */
+//                JSONObject codeBlock = (JSONObject) docNode.getProperty("codeblock");
+                String codeBlock = (String) docNode.getProperty(MdExtractor.CODEBLOCK);
+                JSONObject json = JSONObject.parseObject(codeBlock);
+                String tmp = "";
+                for(Map.Entry entry : json.entrySet()) {
+                    tmp += (String) entry.getValue();
+                }
+//                System.out.println(tmp);
+                if(!tmp.equals("")) codeblockMap.put(id, tmp);
+
+                /* 表格 */
+                String table = (String) docNode.getProperty(MdExtractor.TABLE);
+                json = JSONObject.parseObject(table);
+                tmp = "";
+                for(Map.Entry entry: json.entrySet()) {
+                    JSONArray list = new JSONArray(Collections.singletonList(entry.getValue()));
+                    for(int i = 0;i < list.size(); i++) {
+                        tmp += list.getString(i);
+                    }
+                }
+//                System.out.println(tmp);
+                if(!tmp.equals("")) tableMap.put(id, tmp);
+
+            }
+            tx.success();
+        }
+        /* 根据 Map 中的信息，建立 code_mention 的关系 */
+        setRelationships(CExtractor.c_code_file);
+        setRelationships(CExtractor.c_function);
+        setRelationships(CExtractor.c_variable);
+        setRelationships(CExtractor.c_struct);
+        setRelationships(CExtractor.c_field);
+    }
+
+    private void setRelationships(Label label) {
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            ResourceIterator<Node> Nodes = db.findNodes(label);
+            while (Nodes.hasNext()) {
+                Node fileNode = Nodes.next();
+                long nodeId = fileNode.getId();
+                String name = "";
+                if (label == CExtractor.c_code_file) name = (String) fileNode.getProperty(CExtractor.FILENAME);
+                else name = (String) fileNode.getProperty(CExtractor.NAME);
+
+                if(nameFilter(name)) continue;
+
+                for (Map.Entry entry : contentMap.entrySet()) {
+                    long id = (long) entry.getKey();
+                    Set<String> set = (Set<String>) entry.getValue();
+                    if (set.contains(name)) {
+                        if (!edges.containsKey(nodeId) || !edges.get(nodeId).contains(id)) {
+                            fileNode.createRelationshipTo(db.getNodeById(id), CODE_MENTION);
+                            if (!edges.containsKey(nodeId)) {
+                                List<Long> tmp = new ArrayList<>();
+                                tmp.add(id);
+                                edges.put(nodeId, tmp);
+                            } else {
+                                edges.get(nodeId).add(id);
+                            }
+                        }
+                    }
+                }
+                for (Map.Entry entry : codeblockMap.entrySet()) {
+                    long id = (long) entry.getKey();
+                    String value = (String) entry.getValue();
+                    if (value.contains(name)) {
+                        if (!edges.containsKey(nodeId) || !edges.get(nodeId).contains(id)) {
+                            fileNode.createRelationshipTo(db.getNodeById(id), CODE_MENTION);
+                            if (!edges.containsKey(nodeId)) {
+                                List<Long> tmp = new ArrayList<>();
+                                tmp.add(id);
+                                edges.put(nodeId, tmp);
+                            } else {
+                                edges.get(nodeId).add(id);
+                            }
+                        }
+                    }
+                }
+                for (Map.Entry entry : tableMap.entrySet()) {
+                    long id = (long) entry.getKey();
+                    String value = (String) entry.getValue();
+                    if (value.contains(name)) {
+                        if (!edges.containsKey(nodeId) || !edges.get(nodeId).contains(id)) {
+                            fileNode.createRelationshipTo(db.getNodeById(id), CODE_MENTION);
+                            if (!edges.containsKey(nodeId)) {
+                                List<Long> tmp = new ArrayList<>();
+                                tmp.add(id);
+                                edges.put(nodeId, tmp);
+                            } else {
+                                edges.get(nodeId).add(id);
+                            }
+                        }
+                    }
+                }
+            }
+            tx.success();
+        }
+    }
+
+    /**
+     * 剔除一般性的命名实体，避免引入噪声关系
+     */
+    private boolean nameFilter(String name) {
+        if(name.length() <= 3) return true;
+        List<String> fileterList = new ArrayList<>();
+        String[] list = { "main", "type", "name", "value", "info", "task", "time", "part",
+                        "size", "flag", "mode", "lock", "addr", "path", "data", "node",
+                        "call", "used", "start", "param", "func", "format",
+                        "INT32", "UINT32" };
+        fileterList.addAll(Arrays.asList(list));
+        if(fileterList.contains(name)) {
+            return true;
+        }
+        return false;
     }
 
     /**
      * 代码与 markdown 文档的关联
-     * TODO: C语言代码实体的属性不完善，需要路径信息(目前只是name属性)
-     * @throws IOException
-     * @throws ParseException
      */
     private void detectCodeMentionInMd() throws IOException, ParseException {
         final String CONTENT_FIELD = "content";
         final String CODEBLOCK_FIELD = "codeblock";
+        final String TABLE_FIELD = "table";
         final String ID_FIELD = "id";
         Analyzer analyzer = new StandardAnalyzer();
         Directory directory = new RAMDirectory();
@@ -63,17 +222,21 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
         ResourceIterator<Node> docxNodes = null;
         // 处理两类 markdown 类型的实体，相关属性包括：content, codeblock
         try (Transaction tx = this.getDb().beginTx()) {
+            /* 为文档实体建立索引 */
             docxNodes = this.getDb().findNodes(MdExtractor.MARKDOWNSECTION);
             while (docxNodes.hasNext()) {
                 Node docxNode = docxNodes.next();
                 String content = (String) docxNode.getProperty(MdExtractor.CONTENT);
                 String codeblock = (String) docxNode.getProperty(MdExtractor.CODEBLOCK);
-                content = content.replaceAll("\\W+", " ").toLowerCase();
-                codeblock = codeblock.replaceAll("\\W+", " ").toLowerCase();
+                String table = (String) docxNode.getProperty(MdExtractor.TABLE);
+                content = content.replaceAll("\\W+", " ");
+                codeblock = codeblock.replaceAll("\\W+", " ");
+                table = table.replaceAll("\\W+", " ");
                 Document document = new Document();
                 document.add(new StringField(ID_FIELD, "" + docxNode.getId(), Field.Store.YES));
                 document.add(new TextField(CONTENT_FIELD, content, Field.Store.YES));
                 document.add(new TextField(CODEBLOCK_FIELD, codeblock, Field.Store.YES));
+                document.add(new TextField(TABLE_FIELD, table, Field.Store.YES));
                 iwriter.addDocument(document);
             }
 
@@ -82,8 +245,8 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
                 Node docxNode = docxNodes.next();
                 String content = (String) docxNode.getProperty(MdExtractor.CONTENT);
                 String codeblock = (String) docxNode.getProperty(MdExtractor.CODEBLOCK);
-                content = content.replaceAll("\\W+", " ").toLowerCase();
-                codeblock = codeblock.replaceAll("\\W+", " ").toLowerCase();
+                content = content.replaceAll("\\W+", " ");
+                codeblock = codeblock.replaceAll("\\W+", " ");
                 Document document = new Document();
                 document.add(new StringField(ID_FIELD, "" + docxNode.getId(), Field.Store.YES));
                 document.add(new TextField(CONTENT_FIELD, content, Field.Store.YES));
@@ -104,7 +267,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             while (fileNodes.hasNext()) {
                 Node fileNode = fileNodes.next();
                 String name = (String) fileNode.getProperty(CExtractor.FILENAME);
-                String q = name.toLowerCase();
+                String q = name;
                 Query query = parser.parse(q);
                 ScoreDoc[] hits = isearcher.search(query, 10000).scoreDocs;
                 if (hits.length > 0 && hits.length < 20) {
@@ -122,7 +285,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             while (funcNodes.hasNext()) {
                 Node funcNode = funcNodes.next();
                 String name = (String) funcNode.getProperty(CExtractor.NAME);
-                String q = name.toLowerCase();
+                String q = name;
                 Query query = parser.parse(q);
                 ScoreDoc[] hits = isearcher.search(query, 10000).scoreDocs;
                 if (hits.length > 0 && hits.length < 20) {
@@ -140,7 +303,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             while (dsNodes.hasNext()) {
                 Node dsNode = dsNodes.next();
                 String name = (String) dsNode.getProperty(CExtractor.NAME);
-                String q = name.toLowerCase();
+                String q = name;
                 Query query = parser.parse(q);
                 ScoreDoc[] hits = isearcher.search(query, 10000).scoreDocs;
                 if (hits.length > 0 && hits.length < 20) {
@@ -158,7 +321,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             while (varNodes.hasNext()) {
                 Node varNode = varNodes.next();
                 String name = (String) varNode.getProperty(CExtractor.NAME);
-                String q = name.toLowerCase();
+                String q = name;
                 Query query = parser.parse(q);
                 ScoreDoc[] hits = isearcher.search(query, 10000).scoreDocs;
                 if (hits.length > 0 && hits.length < 20) {
@@ -170,26 +333,6 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             }
             tx.success();
         }
-
-        /*
-        try (Transaction tx = this.getDb().beginTx()) {
-            ResourceIterator<Node> fileNodes = this.getDb().findNodes(JavaExtractor.CLASS);
-            while (fileNodes.hasNext()) {
-                Node fileNode = fileNodes.next();
-                String name = (String) fileNode.getProperty(JavaExtractor.NAME);
-                String q = name.toLowerCase();
-                Query query = parser.parse(q);
-                ScoreDoc[] hits = isearcher.search(query, 10000).scoreDocs;
-                if (hits.length > 0 && hits.length < 20) {
-                    for (ScoreDoc hit : hits) {
-                        Node docxNode = this.getDb().getNodeById(Long.parseLong(ireader.document(hit.doc).get(ID_FIELD)));
-                        fileNode.createRelationshipTo(docxNode, CODE_MENTION);
-                    }
-                }
-            }
-            tx.success();
-        }
-         */
     }
 
     /**
@@ -202,26 +345,31 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
             ResourceIterator<Node> fileNodes = this.getDb().findNodes(CExtractor.c_code_file);
             while (fileNodes.hasNext()) {
                 Node fileNode = fileNodes.next();
-                // TODO: 该属性尚未添加到code_file当中，需要与commit中的 diff_summary 中的文件路径进行正则匹配
-                String fullName = (String) fileNode.getProperty(CExtractor.FULLNAME);
-                String sig;
-                if(fullName.contains(".c")) sig = fullName.replace('.', '/') + ".c";
-                else sig = fullName.replace('.', '/') + ".h";
-                codeFileMap.put(sig, fileNode);
+                String fullName = (String) fileNode.getProperty(CExtractor.FILEFULLNAME);
+                if(fullName.contains(".c") || fullName.contains(".h")) {
+                    if(fullName.contains("\\")) {
+                        fullName = fullName.replaceAll("\\\\", "/");
+                    }
+                    codeFileMap.put(fullName, fileNode);
+                }
             }
             ResourceIterator<Node> commits = this.getDb().findNodes(GitExtractor.COMMIT);
             while (commits.hasNext()) {
                 Node commit = commits.next();
-                String diffSummary = (String) commit.getProperty(GitExtractor.DIFF_SUMMARY);
-                Matcher matcher = pattern.matcher(diffSummary);
-                while (matcher.find()) {
-                    String relStr = matcher.group(1);
-                    String srcPath = matcher.group(2);
-                    String dstPath = matcher.group(3);
-                    RelationshipType relType = relStr.equals("ADD") ? ADD : relStr.equals("MODIFY") ? MODIFY : DELETE;
-                    for (String sig : codeFileMap.keySet())
-                        if (srcPath.contains(sig) || dstPath.contains(sig))
-                            commit.createRelationshipTo(codeFileMap.get(sig), relType);
+                List<String> diffSummary = Arrays.asList(((String) commit.getProperty(GitExtractor.DIFF_SUMMARY)).split("\n"));
+                for(String diff : diffSummary) {
+                    Matcher matcher = pattern.matcher(diff);
+                    while (matcher.find()) {
+                        String relStr = matcher.group(1);
+                        String srcPath = matcher.group(2);
+                        String dstPath = matcher.group(3);
+                        RelationshipType relType = relStr.equals("ADD") ? ADD : relStr.equals("MODIFY") ? MODIFY : DELETE;
+                        for (String sig : codeFileMap.keySet()) {
+                            if (sig.contains(srcPath) || sig.contains(dstPath)) {
+                                commit.createRelationshipTo(codeFileMap.get(sig), relType);
+                            }
+                        }
+                    }
                 }
             }
             tx.success();

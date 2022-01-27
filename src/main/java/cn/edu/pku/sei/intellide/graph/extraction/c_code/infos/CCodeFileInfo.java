@@ -245,6 +245,7 @@ public class CCodeFileInfo {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.FILENAME, fileName);
+        map.put(CExtractor.FILEFULLNAME, fileFullName);
         id = inserter.createNode(map, CExtractor.c_code_file);
         return id;
     }
