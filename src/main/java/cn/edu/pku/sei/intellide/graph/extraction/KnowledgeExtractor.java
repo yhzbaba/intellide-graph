@@ -27,6 +27,7 @@ public abstract class KnowledgeExtractor {
 
     @Getter
     private BatchInserter inserter = null;
+
     @Getter
     private GraphDatabaseService db = null;
 

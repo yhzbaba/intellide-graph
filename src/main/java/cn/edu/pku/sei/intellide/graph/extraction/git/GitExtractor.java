@@ -33,7 +33,6 @@ public class GitExtractor extends KnowledgeExtractor {
     public static final String MESSAGE = "message";
     public static final String COMMIT_TIME = "commitTime";
     public static final String DIFF_SUMMARY = "diffSummary";
-    public static final String DIFF_INFO = "diffInfo";
     public static final Label COMMIT = Label.label("Commit");
     public static final Label TIMESTAMP = Label.label("TimeStamp");
     public static final String EMAIL_ADDRESS = "emailAddress";
@@ -47,7 +46,7 @@ public class GitExtractor extends KnowledgeExtractor {
     // 记录最新的commit
     private boolean flag = false;
 
-    static JSONArray diffInfos = new JSONArray();
+//    static JSONArray diffInfos = new JSONArray();
 
     public static void main(String[] args) {
 //        GitExtractor test = new GitExtractor();
@@ -119,7 +118,6 @@ public class GitExtractor extends KnowledgeExtractor {
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
         Set<String> parentNames = new HashSet<>();
-        diffInfos.clear();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -131,8 +129,8 @@ public class GitExtractor extends KnowledgeExtractor {
             CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
             newTreeIter.reset(reader, head);
             List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
-            String diff = "";
             for (int k = 0; k < diffs.size(); k++) {
+                /*
                 ByteArrayOutputStream out = new ByteArrayOutputStream();
                 DiffFormatter df = new DiffFormatter(out);
                 df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
@@ -140,14 +138,16 @@ public class GitExtractor extends KnowledgeExtractor {
                 df.format(diffs.get(k));
                 String diffText = out.toString("UTF-8");
                 diff += diffText;
+                 */
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
-            if(diff.equals("")) continue;
+//            if(diff.equals("")) continue;
             // 对 diff 进行拆分，暂且以文件作为划分依据（diff --git分割）
-            splitDiffs(diff, diffInfos);
+//            splitDiffs(diff, diffInfos);
+
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
-        map.put(DIFF_INFO, diffInfos.toString());
+//        map.put(DIFF_INFO, diffInfos.toString());
         long commitNodeId = this.getInserter().createNode(map, COMMIT);
         // 将最新的commit标记
         if(!flag) {

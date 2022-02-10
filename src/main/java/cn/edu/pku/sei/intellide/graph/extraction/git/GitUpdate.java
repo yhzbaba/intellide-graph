@@ -15,10 +15,8 @@ import org.eclipse.jgit.revwalk.RevCommit;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
 import org.eclipse.jgit.treewalk.CanonicalTreeParser;
 import com.alibaba.fastjson.JSONException;
-import com.alibaba.fastjson.JSONObject;
 import org.neo4j.graphdb.*;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -29,7 +27,6 @@ public class GitUpdate extends KnowledgeExtractor {
     public static final String MESSAGE = "message";
     public static final String COMMIT_TIME = "commitTime";
     public static final String DIFF_SUMMARY = "diffSummary";
-    public static final String DIFF_INFO = "diffInfo";
     public static final Label COMMIT = Label.label("Commit");
     public static final Label TIMESTAMP = Label.label("TimeStamp");
     public static final String EMAIL_ADDRESS = "emailAddress";
@@ -40,11 +37,9 @@ public class GitUpdate extends KnowledgeExtractor {
     private Map<String, Node> commitMap = new HashMap<>();
     private Map<String, Node> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
-    // 记录并更新图谱的 TIMESTAMP 节点
+    /* 记录并更新图谱的 TIMESTAMP 节点 */
     private Map<String, Object> timeStampMap = new HashMap<>();
     private boolean flag = false;
-
-    JSONArray diffInfos = new JSONArray();
 
     /**
      * 记录此次更新涉及到的commit信息（commit_name作为标识）
@@ -77,8 +72,8 @@ public class GitUpdate extends KnowledgeExtractor {
             Iterable<RevCommit> commits = null;
             try {
                 // 获取所有 commit 日志记录
-//                commits = git.log().call();
-                commits = git.log().setMaxCount(30).call();
+                commits = git.log().call();
+//                commits = git.log().setMaxCount(30).call();
             } catch (GitAPIException e) {
                 e.printStackTrace();
             }
@@ -113,9 +108,8 @@ public class GitUpdate extends KnowledgeExtractor {
             ex.printStackTrace();
         }
 
-        // 根据 commitInfos 中的 commit 信息，利用 extraction/c_code 中的实现解析代码文件从而更新图谱
-
-        new CodeUpdate(commitInfos);
+        // 根据 commitInfos 中的 commit 信息，利用 GumTree 得到 edit actions 从而更新图谱
+        new GraphUpdate(commitInfos);
 
         // 更新 timeStamp
         updateTimeStamp();
@@ -137,7 +131,6 @@ public class GitUpdate extends KnowledgeExtractor {
         map.put(COMMIT_TIME, commit.getCommitTime());
         List<String> diffStrs = new ArrayList<>();
         Set<String> parentNames = new HashSet<>();
-        diffInfos.clear();
 
         for (int i = 0; i < commit.getParentCount(); i++) {
             parentNames.add(commit.getParent(i).getName());
@@ -149,22 +142,12 @@ public class GitUpdate extends KnowledgeExtractor {
             CanonicalTreeParser newTreeIter = new CanonicalTreeParser();
             newTreeIter.reset(reader, head);
             List<DiffEntry> diffs = git.diff().setNewTree(newTreeIter).setOldTree(oldTreeIter).call();
-            String diff = "";
             for (int k = 0; k < diffs.size(); k++) {
-                ByteArrayOutputStream out = new ByteArrayOutputStream();
-                DiffFormatter df = new DiffFormatter(out);
-                df.setDiffComparator(RawTextComparator.WS_IGNORE_ALL);
-                df.setRepository(git.getRepository());
-                df.format(diffs.get(k));
-                String diffText = out.toString("UTF-8");
-                diff += diffText;
                 diffStrs.add(diffs.get(k).getChangeType().name() + " " + diffs.get(k).getOldPath() + " to " + diffs.get(k).getNewPath());
             }
-            if(diff.equals("")) continue;
-            GitExtractor.splitDiffs(diff, diffInfos);
         }
         map.put(DIFF_SUMMARY, String.join("\n", diffStrs));
-        map.put(DIFF_INFO, diffInfos.toString());
+
         // 如果是最新的commit，记录作为 timeStamp
         if(!flag) {
             flag = true;
@@ -219,6 +202,7 @@ public class GitUpdate extends KnowledgeExtractor {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
+        /* 记录 commit 修改文件以及父结点，在图谱更新中进一步处理 */
         addCommitInfo(map, parentNames);
     }
 
@@ -242,13 +226,13 @@ public class GitUpdate extends KnowledgeExtractor {
     }
 
     /**
-     * 将当前commit的信息存入全局变量commitInfos中
+     * 将当前commit的信息存入全局变量 commitInfos 中
+     * 主要是 diffSummary 属性，用于文件定位
      */
     private void addCommitInfo(Map<String, Object> map, Set<String> parentNames) {
         CommitInfo gitInfo = new CommitInfo();
         gitInfo.name = (String) map.get(NAME);
         gitInfo.diffSummary = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
-        gitInfo.diffInfo = JSONArray.parseArray((String) map.get(DIFF_INFO));
         gitInfo.parent.addAll(parentNames);
         commitInfos.put(gitInfo.name, gitInfo);
     }
@@ -280,12 +264,12 @@ public class GitUpdate extends KnowledgeExtractor {
      */
     class CommitInfo {
         String name;
+
         boolean isHandled = false;
-        /**
-         * 每个String是: Change_type oldFilePath to newFilePath 的格式
-         */
+
+        /* 每个String是: Change_type oldFilePath to newFilePath 的格式 */
         List<String> diffSummary = new ArrayList<>();
-        JSONArray diffInfo = new JSONArray();
+
         List<String> parent = new ArrayList<>();
     }
 }

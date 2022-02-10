@@ -119,7 +119,8 @@ public class CodeUpdate extends KnowledgeExtractor {
      * @param commitInfo
      */
     private void parseCommit(GitUpdate.CommitInfo commitInfo) {
-        JSONArray diffInfos = commitInfo.diffInfo;
+//        JSONArray diffInfos = commitInfo.diffInfo;
+        JSONArray diffInfos = new JSONArray();
         for(int i = 0;i < diffInfos.size();i++) {
             // 只涉及单个代码文件的 diff 信息
             System.out.println("diffInfos: " + diffInfos.getJSONObject(i));
