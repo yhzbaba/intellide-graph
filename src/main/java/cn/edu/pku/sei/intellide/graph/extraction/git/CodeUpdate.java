@@ -296,7 +296,6 @@ public class CodeUpdate extends KnowledgeExtractor {
                     Node node = (Node) row.get(key);
                     CDataStructureInfo dataStructure = new CDataStructureInfo();
                     dataStructure.setName((String) node.getProperty("name"));
-                    dataStructure.setContent((String) node.getProperty("content"));
                     dataStructure.setTypedefName((String) node.getProperty("typedefName"));
                     dataStructure.setIsEnum((Boolean) node.getProperty("isEnum"));
                     // 获取当前 dataStruct 的 fieldInfo 列表
@@ -328,7 +327,6 @@ public class CodeUpdate extends KnowledgeExtractor {
                     Node node = (Node) row.get(key);
                     CFunctionInfo func = new CFunctionInfo();
                     func.setName((String) node.getProperty("name"));
-                    func.setContent((String) node.getProperty("content"));
                     func.setFullName((String) node.getProperty("fullName"));
                     func.setBelongTo((String) node.getProperty("belongTo"));
                     func.setBelongToName((String) node.getProperty("belongToName"));
@@ -508,7 +506,6 @@ public class CodeUpdate extends KnowledgeExtractor {
             addFunctions.forEach(func -> {
                Node node = db.createNode(CExtractor.c_function);
                node.setProperty("name", func.getName());
-               node.setProperty("content", func.getContent());
                node.setProperty("fullName", func.getFullName());
                node.setProperty("belongTo", func.getBelongTo());
                node.setProperty("fullParams", func.getFullParams());
@@ -528,7 +525,6 @@ public class CodeUpdate extends KnowledgeExtractor {
                 if(node != null) {
                     // 非更名操作
                     node.setProperty("name", func.getName());
-                    node.setProperty("content", func.getContent());
                     node.setProperty("fullName", func.getFullName());
                     node.setProperty("belongTo", func.getBelongTo());
                     node.setProperty("fullParams", func.getFullParams());
@@ -565,7 +561,7 @@ public class CodeUpdate extends KnowledgeExtractor {
                 }
                 else {
                     // 更名操作，需要匹配原节点
-                    String tmp = func.getContent();
+                    String tmp = func.getFullName();
                     tmp.replace(func.getName(), "");
                     // TODO: 匹配属性可能不足够（也许引入参数列表）
                     String cql = "match (n:c_function) where n.belongTo = '" + func.getBelongTo() + "' and " +

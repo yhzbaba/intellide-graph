@@ -16,6 +16,8 @@ import java.util.Map;
 public class CProjectInfo {
     @Getter
     private Map<String, CCodeFileInfo> codeFileInfoMap = new HashMap<>();
+    @Getter
+    private int numberOfFiles;
 
     /**
      * 项目路径下所有文件构造TranslationUnit，构造对应CCodeFileInfo,这个函数结束codeFileInfoMap就构建完成了
@@ -38,7 +40,7 @@ public class CProjectInfo {
                 } else {
                     continue;
                 }
-//                System.out.println(fileName);
+                numberOfFiles++;
                 IASTTranslationUnit translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(fileFullName));
                 CCodeFileInfo codeFileInfo = new CCodeFileInfo(inserter, fileFullName, fileName, translationUnit);
                 codeFileInfoMap.put(fileName, codeFileInfo);

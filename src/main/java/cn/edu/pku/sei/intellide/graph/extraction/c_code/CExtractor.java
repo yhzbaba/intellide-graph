@@ -5,6 +5,7 @@ import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CCodeFileInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CProjectInfo;
 
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
 import org.eclipse.core.runtime.CoreException;
 import org.neo4j.graphdb.Label;
 import org.neo4j.graphdb.RelationshipType;
@@ -40,6 +41,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final String ISDEFINE = "isDefine";
     public static final String ISSTRUCTVARIABLE = "isStructVariable";
     public static final String FILEFULLNAME = "fileFullName";
+    public static final String TAILFILENAME = "tailFileName";
 
     @Override
     public boolean isBatchInsert() {
@@ -49,12 +51,17 @@ public class CExtractor extends KnowledgeExtractor {
     @Override
     public void extraction() {
         CProjectInfo projectInfo = new CProjectInfo();
+        for (int i = 0; i < FunctionUtil.SIZE_OF_FUNCTION_HASH_SET; i++) {
+            FunctionUtil.FUNCTION_HASH_LIST[i] = new ArrayList<>();
+        }
         BatchInserter inserter = this.getInserter();
         try {
             /* 完成创建节点的工作 */
             projectInfo.makeTranslationUnits(this.getDataDir(), inserter);
+
             /* 创建节点之间的关系 */
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
+                /* 处理单个文件 */
                 cCodeFileInfo.getIncludeCodeFileList().forEach(key -> {
                     if(projectInfo.getCodeFileInfoMap().containsKey(key)) {
                         inserter.createRelationship(cCodeFileInfo.getId(), projectInfo.getCodeFileInfoMap().get(key).getId(), CExtractor.include, new HashMap<>());
@@ -74,22 +81,20 @@ public class CExtractor extends KnowledgeExtractor {
                     inserter.createRelationship(cCodeFileInfo.getId(), cVariableInfo.getId(), CExtractor.define, new HashMap<>());
                 });
             });
+            /* 处理函数调用关系 */
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
                 cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     /* 对函数调用的每一个函数查询其所属信息 */
                     Set<CFunctionInfo> invokeFunctions = new HashSet<>();
                     cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
-                        CFunctionInfo result = getCalledFunction(projectInfo, cCodeFileInfo, callFunc);
-                        if (result.getId() != -1) {
-                            invokeFunctions.add(result);
+                        List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
+                        for(CFunctionInfo func: result) {
+                            if (func.getId() != -1) {
+                                invokeFunctions.add(func);
+                            }
                         }
                     });
-                    // FIXME 函数调用查询
-                    /*
-                        match (n:c_function{name:'AllocLowestProcessFd'})-[:invoke]->(m:c_function) return m;
-                        该查询得到的子图中存在没有显式调用关系的连边
-                     */
                     invokeFunctions.forEach(invokeFunc -> {
                         inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
                     });
@@ -103,29 +108,25 @@ public class CExtractor extends KnowledgeExtractor {
     }
 
     /**
-     * 确定唯一被调用的函数对象
+     * 确定被调用的函数对象
+     * 和 neo4j-c 版本有出入，没有使用哈希结构
      */
-    private CFunctionInfo getCalledFunction(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
-        CFunctionInfo res = new CFunctionInfo();
+    private List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
+        List<CFunctionInfo> res = new ArrayList<>();
         /* 调用文件内的函数 */
         for(CFunctionInfo func: cCodeFileInfo.getFunctionInfoList()) {
             if(func.getName().equals(name) || func.getFullName().contains(name)) {
-                res.setFunc(func);
+                res.add(func);
                 break;
             }
         }
         /* 调用外部 include 文件的函数 */
-        if(res == null) {
-            List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
-            boolean flag = false;
-            for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
-                if(flag) break;
-                if (!includeFiles.contains(codeFileInfo.getFileName())) continue;
-                for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
-                    if (func.getName().equals(name) || func.getFullName().contains(name)) {
-                        res.setFunc(func);
-                        flag = true; break;
-                    }
+        List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
+        for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
+            if (!includeFiles.contains(codeFileInfo.getFileName())) continue;
+            for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
+                if (func.getName().equals(name) || func.getFullName().contains(name)) {
+                    res.add(func);
                 }
             }
         }

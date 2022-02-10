@@ -18,9 +18,6 @@ public class CFunctionInfo {
     private String name;
     @Getter
     @Setter
-    private String content;
-    @Getter
-    @Setter
     private String fullName;
     @Getter
     @Setter
@@ -107,15 +104,15 @@ public class CFunctionInfo {
             List<String> filtered = finalResult.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
 //            System.out.println(name + "函数的调用情况: " + filtered);
             /* 调用函数去重 */
-            Set<String> set = new HashSet<>(filtered);
-            setCallFunctionNameList(new ArrayList<>(set));
+//            Set<String> set = new HashSet<>(filtered);
+//            setCallFunctionNameList(new ArrayList<>(set));
+            setCallFunctionNameList(filtered);
         }
     }
 
     public void setFunc(CFunctionInfo func) {
         id = func.getId();
         name = func.getName();
-        content = func.getContent();
         fullName = func.getFullName();
         belongTo = func.getBelongTo();
         belongToName = func.getBelongToName();
@@ -128,7 +125,6 @@ public class CFunctionInfo {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
-        map.put(CExtractor.CONTENT, content);
         map.put(CExtractor.FULLNAME, fullName);
         map.put(CExtractor.BELONGTO, belongTo);
         map.put(CExtractor.BELONGTINAME, belongToName);
@@ -141,7 +137,7 @@ public class CFunctionInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hash(fullName, content, belongTo);
+        return Objects.hash(fullName, belongTo);
     }
 
     @Override
@@ -155,6 +151,6 @@ public class CFunctionInfo {
                 return false;
             }
         }
-        return (fullName.equals(func.getFullName()) && content.equals(func.getContent()) && belongTo.equals(func.getBelongTo()));
+        return (fullName.equals(func.getFullName()) && belongTo.equals(func.getBelongTo()));
     }
 }

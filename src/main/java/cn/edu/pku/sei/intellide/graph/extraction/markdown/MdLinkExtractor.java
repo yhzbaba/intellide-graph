@@ -1,8 +1,6 @@
 package cn.edu.pku.sei.intellide.graph.extraction.markdown;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
-import com.sun.org.apache.bcel.internal.generic.INSTANCEOF;
-import org.apache.pdfbox.pdfviewer.MapEntry;
 import org.neo4j.graphdb.*;
 
 import java.util.*;

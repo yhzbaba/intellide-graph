@@ -1,11 +1,16 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
 import java.util.List;
 
 public class FunctionUtil {
+    public static int SIZE_OF_FUNCTION_HASH_SET = 1111113;
+
+    public static List<CFunctionInfo>[] FUNCTION_HASH_LIST = new ArrayList[SIZE_OF_FUNCTION_HASH_SET];
+
     /**
      * 同时考虑了fun1() book.fun1() bookPtr->fun1() printf(fun1())
      * @param expression
@@ -48,7 +53,6 @@ public class FunctionUtil {
     public static List<String> getFunctionNameFromExpressionStatement(IASTExpressionStatement statement) {
         List<String> result = new ArrayList<>();
         for (IASTNode node : statement.getChildren()) {
-//            System.out.println("hao " + node.getClass() + "->" + node.getRawSignature());
             if(node instanceof IASTFunctionCallExpression) {
                 IASTFunctionCallExpression functionCallExpression = (IASTFunctionCallExpression)node;
                 // 直接的函数调用语句
@@ -62,7 +66,6 @@ public class FunctionUtil {
     public static List<String> getFunctionNameFromReturnStatement(IASTReturnStatement statement) {
         List<String> result = new ArrayList<>();
         for (IASTNode node : statement.getChildren()) {
-//            System.out.println(node.getClass() + " -> " + node.getRawSignature());
             if(node instanceof IASTFunctionCallExpression) {
                 // 直接的函数调用语句
                 result.addAll(getFunctionNameFromFunctionCallExpression((IASTFunctionCallExpression)node));
@@ -133,5 +136,15 @@ public class FunctionUtil {
             }
         }
         return result;
+    }
+
+    public static int hashFunc(String key){
+        int arraySize = SIZE_OF_FUNCTION_HASH_SET; 			//数组大小一般取质数
+        int hashCode = 0;
+        for(int i = 0; i < key.length(); i++){        //从字符串的左边开始计算
+            int letterValue = key.charAt(i) - 40;//将获取到的字符串转换成数字，比如a的码值是97，则97-96=1 就代表a的值，同理b=2；
+            hashCode = ((hashCode << 5) + letterValue + arraySize) % arraySize;//防止编码溢出，对每步结果都进行取模运算
+        }
+        return hashCode;
     }
 }

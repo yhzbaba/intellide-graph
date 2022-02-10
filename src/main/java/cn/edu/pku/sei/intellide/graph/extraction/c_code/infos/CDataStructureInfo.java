@@ -17,9 +17,6 @@ public class CDataStructureInfo {
     private String name;
     @Getter
     @Setter
-    private String content;
-    @Getter
-    @Setter
     private String typedefName;
     @Getter
     @Setter
@@ -54,21 +51,25 @@ public class CDataStructureInfo {
     }
 
     public void initStructFieldInfo() {
+        boolean isPointer;
         for (IASTNode node: simpleDeclaration.getChildren()) {
             for (IASTNode node2: node.getChildren()) {
                 CFieldInfo fieldInfo = new CFieldInfo();
                 StringBuilder name = new StringBuilder();
                 StringBuilder type = new StringBuilder();
-                boolean isPointer = false;
+                isPointer = false;
                 boolean isArray = false;
-                boolean isNull = false;
                 for(IASTNode node3: node2.getChildren()) {
                     if (node3 instanceof IASTDeclarator) {
-                        // 名字部分
-                        name.append(((IASTDeclarator) node3).getName().toString());
+                        // 名字部分 目前的策略是只有直接的函数指针保存
                         if (ASTUtil.hasPointerType((IASTDeclarator)node3)){
                             // 指针
                             isPointer = true;
+                            for (IASTNode node4: node3.getChildren()) {
+                                if (node4 instanceof IASTDeclarator) {
+                                    name.append(((IASTDeclarator) node4).getName().toString());
+                                }
+                            }
                         }
                         if (node3 instanceof IASTArrayDeclarator) {
                             isArray = true;
@@ -76,8 +77,6 @@ public class CDataStructureInfo {
                     } else if (node3 instanceof IASTDeclSpecifier) {
                         // 类型部分 还没有处理函数指针
                         type.append(node3.getRawSignature());
-                    } else {
-                        isNull = true;
                     }
                 }
                 if ("".equals(name.toString())) {
@@ -91,8 +90,10 @@ public class CDataStructureInfo {
                     type.append("[]");
                 }
                 fieldInfo.setType(type.toString());
-                if(this.inserter != null) fieldInfo.createNode(inserter);
-                fieldInfoList.add(fieldInfo);
+                if(isPointer) {
+                    if(this.inserter != null) fieldInfo.createNode(inserter);
+                    fieldInfoList.add(fieldInfo);
+                }
             }
         }
     }
@@ -101,7 +102,6 @@ public class CDataStructureInfo {
         if(id != -1) return id;
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
-        map.put(CExtractor.CONTENT, content);
         map.put(CExtractor.TYPEDEFNAME, typedefName);
         map.put(CExtractor.ISENUM, isEnum);
         id = inserter.createNode(map, CExtractor.c_struct);
@@ -110,7 +110,7 @@ public class CDataStructureInfo {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, typedefName);
+        return Objects.hash(name, typedefName, isEnum);
     }
 
     @Override

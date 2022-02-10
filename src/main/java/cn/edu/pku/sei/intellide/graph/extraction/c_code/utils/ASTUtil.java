@@ -5,10 +5,10 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 
 public class ASTUtil {
-    public static String getClassStructName(IASTSimpleDeclaration simpleDeclaration) {
-        IASTDeclSpecifier declSpecifier = simpleDeclaration.getDeclSpecifier();
-        if (declSpecifier instanceof ICPPASTCompositeTypeSpecifier) {
-            return ((ICPPASTCompositeTypeSpecifier) declSpecifier).getName().toString();
+    public static String getClassStructName(IASTSimpleDeclaration simpleDeclaration){
+        IASTDeclSpecifier declSpecifier=simpleDeclaration.getDeclSpecifier();
+        if(declSpecifier instanceof ICPPASTCompositeTypeSpecifier){
+            return ((ICPPASTCompositeTypeSpecifier)declSpecifier).getName().toString();
         }
         return "";
     }

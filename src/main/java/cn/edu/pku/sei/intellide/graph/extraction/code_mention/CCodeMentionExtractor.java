@@ -65,7 +65,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
         /* code_mention in markdown documents */
         detectCodeMentionInDoc();
         /* code_mention in Diff */
-        this.detectCodeMentionInDiff();
+//        this.detectCodeMentionInDiff();
     }
 
     private void detectCodeMentionInDoc() {
