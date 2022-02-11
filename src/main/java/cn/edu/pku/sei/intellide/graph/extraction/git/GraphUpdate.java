@@ -244,38 +244,42 @@ public class GraphUpdate extends KnowledgeExtractor {
                     else if(editAction.content.get(i).contains("DefineVar")) {
                         // add Macro #define(as variable)
                         addVariables.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroVar"));
+                        break;
                     }
                     else if(editAction.content.get(i).contains("DefineFunc")) {
                         // add Macro #define(as function)
                         addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroFunc"));
+                        break;
                     }
                     i++;
                 }
             }
             else if(editAction.tNode.contains("Declaration")) {
                 int i = 0;
+                boolean isTypeDef = false;
                 while(i < editAction.content.size()) {
-                    if(editAction.content.get(i).contains("GenericString: typedef")) {
+                    if (editAction.content.get(i).contains("GenericString: typedef")) {
                         // typedef struct
-                        addStructs.add(getItemName(0, 0, editAction.content.get(i+1), "Typedef"));
+                        addStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                        isTypeDef = true;
                         break;
                     }
+                }
+                if(!isTypeDef) {
+                    String tmp = dstContent.substring(editAction.Start, editAction.End);
+                    if(tmp.contains("struct")) {
+                        // struct(no typedef)
+                        addStructs.add(getItemName(0, 0, tmp, "Struct"));
+                    }
                     else {
-                        String tmp = dstContent.substring(editAction.Start, editAction.End);
-                        if(tmp.contains("struct")) {
-                            // struct(no typedef)
-                            addStructs.add(getItemName(0, 0, tmp, "Struct"));
+                        Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\);").matcher(tmp);
+                        if(m.find()) {
+                            // function declaration
+                            addFunctions.add(m.group(1));
                         }
                         else {
-                            Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\);").matcher(tmp);
-                            if(m.find()) {
-                                // function declaration
-                                addFunctions.add(m.group(1));
-                            }
-                            else {
-                                // global variable
-                                addVariables.add(tmp.substring(tmp.lastIndexOf(" ")+1, tmp.indexOf(";")));
-                            }
+                            // global variable
+                            addVariables.add(tmp.substring(tmp.lastIndexOf(" ")+1, tmp.indexOf(";")));
                         }
                     }
                 }
@@ -286,6 +290,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                     if(editAction.content.get(i).contains("ParamList")) {
                         // function definition
                         addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
+                        break;
                     }
                 }
             }
@@ -310,7 +315,7 @@ public class GraphUpdate extends KnowledgeExtractor {
     }
 
     /**
-     * 将文件内容输出到字符串，利用位置索引获取代码元素的名称
+     * 利用位置索引获取代码片段，通过正则匹配或者截取子串得到修改代码元素的名称
      * @param type 标识修改代码元素的类型，如 function, variable...
      */
     private String getItemName(int start, int end, String fileContent, String type) {
