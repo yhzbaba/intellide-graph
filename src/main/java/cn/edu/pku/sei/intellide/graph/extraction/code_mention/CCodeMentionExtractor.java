@@ -35,7 +35,7 @@ import java.util.regex.Pattern;
 public class CCodeMentionExtractor extends KnowledgeExtractor {
     public static final RelationshipType CODE_MENTION = RelationshipType.withName("codeMention");
     public static final RelationshipType ADD = RelationshipType.withName("add");
-    public static final RelationshipType MODIFY = RelationshipType.withName("modify");
+    public static final RelationshipType UPDATE = RelationshipType.withName("update");
     public static final RelationshipType DELETE = RelationshipType.withName("delete");
 
     Map<Long, List<Long>> edges = new HashMap<>();
@@ -336,11 +336,11 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
     }
 
     /**
-     * 代码文件实体与commit的关联，ADD, DELETE 和 MODIFY 三种关系(会存在多种关系)
+     * 代码文件实体与commit的关联，ADD, DELETE 和 UPDATE 三种关系(会存在多种关系)
      */
     private void detectCodeMentionInDiff() {
         Map<String, Node> codeFileMap = new HashMap<>();
-        Pattern pattern = Pattern.compile("(ADD|MODIFY|DELETE)\\s+(\\S+)\\s+to\\s+(\\S+)");
+        Pattern pattern = Pattern.compile("(ADD|UPDATE|DELETE)\\s+(\\S+)\\s+to\\s+(\\S+)");
         try (Transaction tx = this.getDb().beginTx()) {
             ResourceIterator<Node> fileNodes = this.getDb().findNodes(CExtractor.c_code_file);
             while (fileNodes.hasNext()) {
@@ -363,7 +363,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
                         String relStr = matcher.group(1);
                         String srcPath = matcher.group(2);
                         String dstPath = matcher.group(3);
-                        RelationshipType relType = relStr.equals("ADD") ? ADD : relStr.equals("MODIFY") ? MODIFY : DELETE;
+                        RelationshipType relType = relStr.equals("ADD") ? ADD : relStr.equals("UPDATE") ? UPDATE : DELETE;
                         for (String sig : codeFileMap.keySet()) {
                             if (sig.contains(srcPath) || sig.contains(dstPath)) {
                                 commit.createRelationshipTo(codeFileMap.get(sig), relType);

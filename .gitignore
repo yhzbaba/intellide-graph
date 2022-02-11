@@ -1,3 +1,4 @@
 target/
 .idea/
 *.iml
+src/main/java/cn/edu/pku/sei/intellide/graph/extraction/git/TestGumTree.java

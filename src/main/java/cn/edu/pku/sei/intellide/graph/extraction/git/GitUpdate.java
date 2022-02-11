@@ -37,7 +37,7 @@ public class GitUpdate extends KnowledgeExtractor {
     private Map<String, Node> commitMap = new HashMap<>();
     private Map<String, Node> personMap = new HashMap<>();
     private Map<String, Set<String>> parentsMap = new HashMap<>();
-    /* 记录并更新图谱的 TIMESTAMP 节点 */
+    // 记录并更新图谱的 TIMESTAMP 节点
     private Map<String, Object> timeStampMap = new HashMap<>();
     private boolean flag = false;
 
@@ -203,7 +203,7 @@ public class GitUpdate extends KnowledgeExtractor {
         } catch (Exception ex) {
             ex.printStackTrace();
         }
-        /* 记录 commit 修改文件以及父结点，在图谱更新中进一步处理 */
+        // 记录 commit 修改文件以及父结点，在图谱更新中进一步处理
         addCommitInfo(map, parentNames);
     }
 
@@ -271,7 +271,7 @@ public class GitUpdate extends KnowledgeExtractor {
 
         boolean isHandled = false;
 
-        /* 每个String是: Change_type oldFilePath to newFilePath 的格式 */
+        // 每个String是: Change_type oldFilePath to newFilePath 的格式
         List<String> diffSummary = new ArrayList<>();
 
         List<String> parent = new ArrayList<>();

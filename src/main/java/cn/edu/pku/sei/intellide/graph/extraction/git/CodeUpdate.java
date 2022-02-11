@@ -242,7 +242,7 @@ public class CodeUpdate extends KnowledgeExtractor {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return new CCodeFileInfo(filePath, fileName, translationUnit);
+        return new CCodeFileInfo(fileName, filePath, translationUnit);
     }
 
     /**
