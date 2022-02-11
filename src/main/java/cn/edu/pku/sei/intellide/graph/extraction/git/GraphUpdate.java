@@ -32,7 +32,7 @@ public class GraphUpdate extends KnowledgeExtractor {
         String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
         String content = getFileContent(filePath);
         int s = 73;
-        int e = 103;
+        int e = 126;
         System.out.println(content.substring(s,e));
 //        String s = "#define FD_ZERO(set) (((fd_set FAR *)(set))->fd_count=0)";
 //        Matcher m = Pattern.compile("(\\s+)([\\w_()]+)(\\s+)").matcher(s);
@@ -66,6 +66,7 @@ public class GraphUpdate extends KnowledgeExtractor {
     private Set<String> addFunctions = new HashSet<>();
     private Set<String> deleteFunctions = new HashSet<>();
     private Set<String> updateFunctions = new HashSet<>();
+    private Map<String, String> renameFunctions = new HashMap<>();
 
     // 记录单个 commit 修改的代码实体的id
     Set<Long> updateEntities = new HashSet<Long>();
@@ -156,9 +157,10 @@ public class GraphUpdate extends KnowledgeExtractor {
                 e.printStackTrace();
             }
 
-            // 完成单个文件的修改信息的记录，统一执行数据库事务进行图谱更新
-
-            // 建立 Commit 与 代码 实体的关联
+            /* 依据全局数据结构的记录：
+             * 建立 Commit 与 Code 实体的关联
+             * 完成单个文件的修改信息的记录，统一执行数据库事务进行图谱更新
+             */
 
         }
     }
@@ -192,8 +194,11 @@ public class GraphUpdate extends KnowledgeExtractor {
      */
     private EditAction parseEditAction(Action action, Tree Node) {
         EditAction editAction = new EditAction();
-        // 父节点的类型和位置
-        String pNode = Node.toString();
+        /* 父节点的类型和位置
+         * 父结点通常是用于修改函数的定位
+         * 等同于调用两次 getParent()，由 Compound 得到 Definition
+         */
+        String pNode = Node.getParent().toString();
         editAction.pNode = pNode.substring(0, pNode.indexOf(" "));
         editAction.pStart = Integer.parseInt(pNode.substring(pNode.indexOf("[") + 1, pNode.indexOf(",")));
         editAction.pEnd = Integer.parseInt(pNode.substring(pNode.indexOf(",") + 1, pNode.indexOf("]"))) - 1;
@@ -280,17 +285,17 @@ public class GraphUpdate extends KnowledgeExtractor {
                 while(i < editAction.content.size()) {
                     if(editAction.content.get(i).contains("ParamList")) {
                         // function definition
-                        addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "Function"));
+                        addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
                     }
                 }
             }
             else if(editAction.tNode.contains("ExprStatement")) {
-                //
-
+                // e.g. 全局变量的赋值语句，只需要获得父结点，即上一级的函数名称，但现在只有 Compound
+                updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
             }
             else if(editAction.tNode.contains("DeclList")) {
                 // 函数内部表达式
-
+                updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
             }
         }
         else if(editAction.type.contains("delete")) {
@@ -342,9 +347,15 @@ public class GraphUpdate extends KnowledgeExtractor {
                 res = m.group(1);
             }
         }
-        else if(type.equals("Function")) {
+        else if(type.equals("FuncDef")) {
             // TODO: 最好的处理是函数名称+参数列表，这里暂且只使用函数名
             Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\)").matcher(tmp);
+            if(m.find()) {
+                res = m.group(1);
+            }
+        }
+        else if(type.equals("Function")) {
+            Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\)[\\n\\s]").matcher(tmp);
             if(m.find()) {
                 res = m.group(1);
             }
