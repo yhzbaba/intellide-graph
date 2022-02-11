@@ -163,6 +163,7 @@ public class GitUpdate extends KnowledgeExtractor {
             commitNode.setProperty(MESSAGE, map.get(MESSAGE));
             commitNode.setProperty(COMMIT_TIME, map.get(COMMIT_TIME));
             commitNode.setProperty(DIFF_SUMMARY, map.get(DIFF_SUMMARY));
+            map.put("id", commitNode.getId());
 
             commitMap.put(commit.getName(), commitNode);
             parentsMap.put(commit.getName(), parentNames);
@@ -232,6 +233,7 @@ public class GitUpdate extends KnowledgeExtractor {
     private void addCommitInfo(Map<String, Object> map, Set<String> parentNames) {
         CommitInfo gitInfo = new CommitInfo();
         gitInfo.name = (String) map.get(NAME);
+        gitInfo.id = (long) map.get("id");
         gitInfo.diffSummary = Arrays.asList(((String) map.get(DIFF_SUMMARY)).split("\n"));
         gitInfo.parent.addAll(parentNames);
         commitInfos.put(gitInfo.name, gitInfo);
@@ -264,6 +266,8 @@ public class GitUpdate extends KnowledgeExtractor {
      */
     class CommitInfo {
         String name;
+
+        long id;
 
         boolean isHandled = false;
 
