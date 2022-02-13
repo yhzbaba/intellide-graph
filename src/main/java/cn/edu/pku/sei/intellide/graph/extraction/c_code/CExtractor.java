@@ -56,12 +56,12 @@ public class CExtractor extends KnowledgeExtractor {
         }
         BatchInserter inserter = this.getInserter();
         try {
-            /* 完成创建节点的工作 */
+            // 完成创建节点的工作
             projectInfo.makeTranslationUnits(this.getDataDir(), inserter);
 
-            /* 创建节点之间的关系 */
+            // 创建节点之间的关系
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-                /* 处理单个文件 */
+                // 处理单个文件
                 cCodeFileInfo.getIncludeCodeFileList().forEach(key -> {
                     if(projectInfo.getCodeFileInfoMap().containsKey(key)) {
                         inserter.createRelationship(cCodeFileInfo.getId(), projectInfo.getCodeFileInfoMap().get(key).getId(), CExtractor.include, new HashMap<>());
@@ -81,30 +81,37 @@ public class CExtractor extends KnowledgeExtractor {
                     inserter.createRelationship(cCodeFileInfo.getId(), cVariableInfo.getId(), CExtractor.define, new HashMap<>());
                 });
             });
-            /* 处理函数调用关系 */
-            projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-                cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
-                cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
-                    /* 对函数调用的每一个函数查询其所属信息 */
-                    Set<CFunctionInfo> invokeFunctions = new HashSet<>();
-                    cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
-                        List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
-                        for(CFunctionInfo func: result) {
-                            if (func.getId() != -1) {
-                                invokeFunctions.add(func);
-                            }
-                        }
-                    });
-                    invokeFunctions.forEach(invokeFunc -> {
-                        inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
-                    });
-                });
-            });
+            // 处理函数调用关系
+            createInvokeRelations(projectInfo, inserter);
+
         } catch (IOException e) {
             e.printStackTrace();
         } catch (CoreException e) {
             e.printStackTrace();
         }
+    }
+
+    public void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
+        projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
+            cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
+            cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
+                // 对函数调用的每一个函数查询其所属信息
+                Set<CFunctionInfo> invokeFunctions = new HashSet<>();
+                cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
+                    List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
+                    for(CFunctionInfo func: result) {
+                        if (func.getId() != -1) {
+                            invokeFunctions.add(func);
+                        }
+                    }
+                });
+                if(inserter != null) {
+                    invokeFunctions.forEach(invokeFunc -> {
+                        inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
+                    });
+                }
+            });
+        });
     }
 
     /**
@@ -113,14 +120,14 @@ public class CExtractor extends KnowledgeExtractor {
      */
     private List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
         List<CFunctionInfo> res = new ArrayList<>();
-        /* 调用文件内的函数 */
+        // 调用文件内的函数
         for(CFunctionInfo func: cCodeFileInfo.getFunctionInfoList()) {
             if(func.getName().equals(name) || func.getFullName().contains(name)) {
                 res.add(func);
                 break;
             }
         }
-        /* 调用外部 include 文件的函数 */
+        // 调用外部 include 文件的函数
         List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
         for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
             if (!includeFiles.contains(codeFileInfo.getFileName())) continue;

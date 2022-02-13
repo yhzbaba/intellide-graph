@@ -1,11 +1,10 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CCodeFileInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CDataStructureInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CVariableInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.GetTranslationUnitUtil;
+import cn.edu.pku.sei.intellide.graph.extraction.code_mention.CCodeMentionExtractor;
 import com.github.gumtreediff.actions.EditScript;
 import com.github.gumtreediff.actions.EditScriptGenerator;
 import com.github.gumtreediff.actions.SimplifiedChawatheScriptGenerator;
@@ -17,7 +16,10 @@ import com.github.gumtreediff.matchers.Matchers;
 import com.github.gumtreediff.tree.Tree;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.core.runtime.CoreException;
+import org.jsoup.nodes.Entities;
 import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.Result;
 import org.neo4j.graphdb.Transaction;
 
 import java.io.*;
@@ -31,18 +33,22 @@ import java.util.regex.Pattern;
 public class GraphUpdate extends KnowledgeExtractor {
 
     public static void main(String[] args) {
+        String cFunc = "main";
+        String cql = "match (n:c_code_file)" +
+                "-[:define]->" +
+                "where n.fileName contains '" + cFunc + "'" +
+                "return m";
+        System.out.println(cql);
 //        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
 //        String content = getFileContent(filePath);
 //        int s = 227;
 //        int e = 322;
 //        System.out.println(content.substring(s,e));
-        String s = "replace oldFunc by newFunc";
-        Matcher m = Pattern.compile("replace\\s(\\w+)\\sby\\s(\\w+)").matcher(s);
-        if(m.find()) {
-            System.out.println(m.group(1) + "\n" + m.group(2));
-        }
-//        String s = "int f;";
-//        System.out.println(s.substring(s.lastIndexOf(" "), s.indexOf(";")));
+//        String s = "replace oldFunc by newFunc";
+//        Matcher m = Pattern.compile("replace\\s(\\w+)\\sby\\s(\\w+)").matcher(s);
+//        if(m.find()) {
+//            System.out.println(m.group(1) + "\n" + m.group(2));
+//        }
     }
 
     private Map<String, GitUpdate.CommitInfo> commitInfos;
@@ -52,6 +58,7 @@ public class GraphUpdate extends KnowledgeExtractor {
 
     /*
      * 记录修改涉及到的代码信息，主要是元素名称，与 CCodeFileInfo 中的信息进行匹配
+     * struct 和 function 的修改包括两类：内部成员的增删、标识符等属性的修改
      * 每次处理文件前需要初始化
      */
     private Set<String> addIncludes = new HashSet<>();
@@ -64,19 +71,20 @@ public class GraphUpdate extends KnowledgeExtractor {
     private Set<String> addStructs = new HashSet<>();
     private Set<String> deleteStructs = new HashSet<>();
     private Set<String> updateStructs = new HashSet<>();
+    private Map<String, Set<String>> addStructMembers = new HashMap<>();
+    private Map<String, Set<String>> deleteStructMembers = new HashMap<>();
 
     private Set<String> addFunctions = new HashSet<>();
     private Set<String> deleteFunctions = new HashSet<>();
-    // updateFunctions 只是记录函数粒度的修改，不涉及具体修改，用于 commit-code relationship 建立
     private Set<String> updateFunctions = new HashSet<>();
     private Map<String, Set<String>> addInvokeFunctions = new HashMap<>();
     private Map<String, Set<String>> deleteInvokeFunctions = new HashMap<>();
     private Map<String, String> renameFunctions = new HashMap<>();
 
     // 记录单个 commit 修改的代码实体的id
-    Set<Long> updateEntities = new HashSet<Long>();
-    Set<Long> addEntities = new HashSet<Long>();
-    Set<Long> deleteEntities = new HashSet<Long>();
+    Set<Long> updateEntities = new HashSet<>();
+    Set<Long> addEntities = new HashSet<>();
+    Set<Long> deleteEntities = new HashSet<>();
 
     public GraphUpdate(Map<String, GitUpdate.CommitInfo> commitInfos) {
         this.commitInfos = commitInfos;
@@ -109,16 +117,17 @@ public class GraphUpdate extends KnowledgeExtractor {
      * @param commitInfo 单个commit涉及的所有修改文件
      */
     private void parseCommit(GitUpdate.CommitInfo commitInfo) {
+        long commitId = commitInfo.id;
         for(String diff: commitInfo.diffSummary) {
             if(!diff.contains(".c") || !diff.contains(".h")) continue;
 
             /* 以单个文件作为单位进行处理，首先进行初始化工作 */
 
             // 获取文件名
-            String file = getFileFromDiff(diff);
+            String fileName = getFileFromDiff(diff);
             // TODO: 这里后期要改成项目代码的路径
-            String srcFile = "" + file;
-            String dstFile = "" + file;
+            String srcFile = "" + fileName;
+            String dstFile = "" + fileName;
 
             // 将文件内容读入字符串
             srcContent = getFileContent(srcFile);
@@ -133,7 +142,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            CCodeFileInfo codeFileInfo = new CCodeFileInfo(file, dstFile, translationUnit);
+            CCodeFileInfo codeFileInfo = new CCodeFileInfo(fileName, dstFile, translationUnit);
             codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
 
             /*
@@ -153,10 +162,8 @@ public class GraphUpdate extends KnowledgeExtractor {
                 EditScript actions = editScriptGenerator.computeActions(mappings);
                 List<Action> actionsList = actions.asList();
                 for(Action action: actionsList) {
-                    /* 解析单个 edit action */
-                    EditAction editAction = parseEditAction(action, action.getNode().getParent());
-                    /* 根据 action 类型，具体解析修改内容 */
-                    parseActionContent(editAction);
+                    // 解析单个 edit action
+                    parseEditAction(action, action.getNode().getParent());
                 }
             } catch (IOException e) {
                 e.printStackTrace();
@@ -167,7 +174,7 @@ public class GraphUpdate extends KnowledgeExtractor {
              * 完成单个文件的修改信息的记录，统一执行数据库事务进行图谱更新
              */
 
-            updateKG();
+            updateKG(codeFileInfo, fileName, commitId);
 
         }
     }
@@ -199,7 +206,7 @@ public class GraphUpdate extends KnowledgeExtractor {
      * 对各类 edit action 进行分类，并针对性地记录
      * @param action
      */
-    private EditAction parseEditAction(Action action, Tree Node) {
+    private void parseEditAction(Action action, Tree Node) {
         EditAction editAction = new EditAction();
         /* 父节点的类型和位置
          * 父结点通常是用于修改函数的定位
@@ -232,16 +239,20 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
             }
         }
-        return editAction;
+        // 根据 action 类型，具体解析修改内容
+        parseActionContent(editAction);
     }
 
     /**
      * 针对单个 action，依据 type 和 tNode 判断修改的具体类型，对 content 属性进行解析并记录
      * Tree Node Types: insert, delete, update, move
      * Modified Object Types: CppTop, Declaration, Definition, ExprStatement, DeclList. Storage, ParameterType
+     * 还有诸多情况未考虑在内，需要根据实测来添加相应的处理
      */
     private void parseActionContent(EditAction editAction) {
         // 依据 edit action 节点的类型进行相应的处理
+
+        // Note:有很多不相关的修改，但因为恰好是-+的操作，识别为 update / move
         if(editAction.type.contains("update")) {
             if(editAction.pNode.equals("Definition")) {
                 // 函数更名
@@ -251,6 +262,17 @@ public class GraphUpdate extends KnowledgeExtractor {
                     String oldFunc = m.group(1);
                     String newFunc = m.group(2);
                     renameFunctions.put(oldFunc, newFunc);
+                }
+            }
+            else if(editAction.tNode.contains("GenericString") && editAction.tNode.contains(".h")) {
+                // - include + include
+                String tmp = editAction.content.get(0);
+                Matcher m = Pattern.compile("replace\\s\"(\\w+)\"\\sby\\s\"(\\w+)\"").matcher(tmp);
+                if(m.find()) {
+                    String oldInclude = m.group(1);
+                    String newInclude = m.group(2);
+                    addIncludes.add(newInclude);
+                    deleteIncludes.add(oldInclude);
                 }
             }
         }
@@ -407,7 +429,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
             }
             else if(editAction.tNode.contains("Storage")) {
-                // 函数标识符的修改
+                // 函数/变量标识符的修改
 
             }
             else if(editAction.tNode.contains("ParameterType")) {
@@ -494,15 +516,326 @@ public class GraphUpdate extends KnowledgeExtractor {
     }
 
     /**
-     * 更新图谱内容，同时建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
+     * 更新图谱内容
      */
-    private void updateKG() {
+    private void updateKG(CCodeFileInfo codeFileInfo, String fileName, long commitId) {
         GraphDatabaseService db = this.getDb();
         try(Transaction tx = db.beginTx()) {
+            // commit -update-> code_file
+            Node commitNode = db.getNodeById(commitId);
+            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
+            commitNode.createRelationshipTo(fileNode, CCodeMentionExtractor.UPDATE);
+            // include files
+            addIncludes.forEach(file -> {
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'}) " +
+                        "match (m:c_code_file{fileName:'" + file + "'}) " +
+                        "create (n) -[:include]-> (m)";
+                db.execute(cql);
+            });
+            deleteIncludes.forEach(file -> {
+                String cql = "match (n:c_code_file{fileName: '" + fileName + "'}) " +
+                        "-[r:include]-> (m:c_code_file{fileName: '" + file + "'}) " +
+                        "delete r";
+                db.execute(cql);
+            });
 
+            // variables
+            addVariables.forEach(var -> {
+               for(CVariableInfo cVar: codeFileInfo.getVariableInfoList()) {
+                   if(cVar.getName().equals(var)) {
+                       Node node = db.createNode(CExtractor.c_variable);
+                       node.setProperty("name", cVar.getName());
+                       node.setProperty("content", cVar.getContent());
+                       node.setProperty("belongTo", cVar.getBelongTo());
+                       node.setProperty("isDefine", cVar.getIsDefine());
+                       node.setProperty("isStructVariable", cVar.getIsStructVariable());
+                       addEntities.add(node.getId());
+                       break;
+                   }
+               }
+            });
+            deleteVariables.forEach(var -> {
+                for(CVariableInfo cVar: codeFileInfo.getVariableInfoList()) {
+                    if(cVar.getName().equals(var)) {
+                        String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                                "-[:define]->" +
+                                "(m:c_variable{name:'" + cVar.getName() + "'})" +
+                                "detach delete m";
+                        db.execute(cql);
+                        // TODO: 删除操作实体不存在，如何建立关系？
+                        break;
+                    }
+                }
+            });
+            updateVariables.forEach(var -> {
+               // TODO:是否需要考虑变量更名的操作
+                for(CVariableInfo cVar: codeFileInfo.getVariableInfoList()) {
+                    if(cVar.getName().equals(var)) {
+                        String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                                "-[:define]->" +
+                                "(m:c_variable{name:'" + cVar.getName() + "'})" +
+                                "return m";
+                        Result res = db.execute(cql);
+                        while(res.hasNext()) {
+                            Map<String, Object> row = res.next();
+                            for(String key: res.columns()) {
+                                Node node = (Node) row.get(key);
+                                node.setProperty("content", cVar.getContent());
+                                node.setProperty("belongTo", cVar.getBelongTo());
+                                node.setProperty("isDefine", cVar.getIsDefine());
+                                node.setProperty("isStructVariable", cVar.getIsStructVariable());
+                                updateEntities.add(node.getId());
+                            }
+                        }
+                        break;
+                    }
+                }
+            });
 
+            // structs
+            addStructs.forEach(struct -> {
+                for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
+                    if(cStruct.getName().equals(struct)) {
+                        Node node = db.createNode(CExtractor.c_variable);
+                        node.setProperty("name", cStruct.getName());
+                        node.setProperty("typedefName", cStruct.getTypedefName());
+                        node.setProperty("isEnum", cStruct.getIsEnum());
+                        for(CFieldInfo field: cStruct.getFieldInfoList()) {
+                            Node fNode = db.createNode(CExtractor.c_field);
+                            fNode.setProperty("name", field.getName());
+                            fNode.setProperty("type", field.getType());
+                            node.createRelationshipTo(fNode, CExtractor.member_of);
+                        }
+                        addEntities.add(node.getId());
+                        break;
+                    }
+                }
+            });
+            deleteStructs.forEach(struct -> {
+                for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
+                    if(cStruct.getName().equals(struct)) {
+                        for(CFieldInfo field: cStruct.getFieldInfoList()) {
+                            String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                                    "-[:define]->" +
+                                    "(m:c_variable{name:'" + cStruct.getName() + "'})" +
+                                    "<-[r:member_of]-" +
+                                    "(o:c_field{name:" + field.getName() + "'})" +
+                                    "detach delete m, o";
+                            db.execute(cql);
+                        }
+                        break;
+                    }
+                }
+            });
+            updateStructs.forEach(struct -> {
+                for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
+                    if (cStruct.getName().equals(struct)) {
+                        String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                                "-[:define]->" +
+                                "(m:c_struct{name:'" + cStruct.getName() + "'})" +
+                                "return m";
+                        Result res = db.execute(cql);
+                        while(res.hasNext()) {
+                            Map<String, Object> row = res.next();
+                            for(String key: res.columns()) {
+                                Node node = (Node) row.get(key);
+                                node.setProperty("typedefName", cStruct.getTypedefName());
+                                node.setProperty("isEnum", cStruct.getIsEnum());
+                                updateEntities.add(node.getId());
+                            }
+                        }
+                    }
+                }
+            });
+            for(Map.Entry entry: addStructMembers.entrySet()) {
+                String cStruct = (String) entry.getKey();
+                Set<String> fieldList = (Set<String>) entry.getValue();
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_struct{name:'" + cStruct + "'})" +
+                        "return m";
+                Result res = db.execute(cql);
+                while(res.hasNext()) {
+                    Map<String, Object> row = res.next();
+                    for(String key: res.columns()) {
+                        Node node = (Node) row.get(key);
+                        fieldList.forEach(field -> {
+                            // 新增的 struct 内的 field，查询、创建节点、关联
+                            for(CDataStructureInfo ds: codeFileInfo.getDataStructureList()) {
+                                for(CFieldInfo f: ds.getFieldInfoList()) {
+                                    if(f.getName().equals(field)) {
+                                        Node fNode = db.createNode(CExtractor.c_field);
+                                        fNode.setProperty("name", field);
+                                        fNode.setProperty("type", f.getType());
+                                        node.createRelationshipTo(fNode, CExtractor.member_of);
+                                        break;
+                                    }
+                                }
+                            }
+                        });
+                        updateEntities.add(node.getId());
+                    }
+                }
+            }
+            for(Map.Entry entry: deleteStructMembers.entrySet()) {
+                String cStruct = (String) entry.getKey();
+                Set<String> fieldList = (Set<String>) entry.getValue();
+                fieldList.forEach(field -> {
+                    String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                            "-[:define]->" +
+                            "(m:c_struct{name:'" + cStruct + "'})" +
+                            "<-[:member_of]-" +
+                            "(o:c_field{name:'" + field + "'})" +
+                            "detach delete o" +
+                            "return m";
+                    db.execute(cql);
+                });
+            }
+
+            // functions
+            addFunctions.forEach(func -> {
+                for(CFunctionInfo cFunc: codeFileInfo.getFunctionInfoList()) {
+                    if(cFunc.getName().equals(func)) {
+                        Node node = db.createNode(CExtractor.c_function);
+                        node.setProperty("name", cFunc.getName());
+                        node.setProperty("fullName", cFunc.getFullName());
+                        node.setProperty("belongTo", cFunc.getBelongTo());
+                        node.setProperty("fullParams", cFunc.getFullParams());
+                        node.setProperty("isInline", cFunc.getIsInline());
+                        node.setProperty("isConst", cFunc.getIsConst());
+                        node.setProperty("isDefine", cFunc.getIsDefine());
+                        node.setProperty("belongToName", cFunc.getBelongToName());
+                        // function invoke relationship
+                        List<String> fileList = codeFileInfo.getIncludeCodeFileList();
+                        fileList.add(fileName);
+                        for(String invokeFunc: cFunc.getCallFunctionNameList()) {
+                            // 从所有可能的代码文件中查找函数
+                            for(String name: fileList) {
+                                String cql = "match (n:c_code_file)" +
+                                        "-[:define]->" +
+                                        "(m:c_function)" +
+                                        "where n.fileName contains '" + name + "' " +
+                                        "and m.name = '" + invokeFunc + "' " +
+                                        "return m";
+                                Result res = db.execute(cql);
+                                if(res.hasNext()) {
+                                    // 找到调用的函数实体
+                                    Map<String, Object> row = res.next();
+                                    for(String key: res.columns()) {
+                                        Node n = (Node) row.get(key);
+                                        node.createRelationshipTo(n, CExtractor.invoke);
+                                    }
+                                    break;
+                                }
+                            }
+                        }
+                        addEntities.add(node.getId());
+                        break;
+                    }
+                }
+            });
+            deleteFunctions.forEach(func -> {
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_function{name:'" + func + "'})" +
+                        "detach delete m";
+                db.execute(cql);
+            });
+            updateFunctions.forEach(func -> {
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_function{name:'" + func + "'})" +
+                        "return m";
+                Result res = db.execute(cql);
+                while(res.hasNext()) {
+                    Map<String, Object> row = res.next();
+                    for(String key: res.columns()) {
+                        Node node = (Node) row.get(key);
+                        updateEntities.add(node.getId());
+                        for(CFunctionInfo cFunc: codeFileInfo.getFunctionInfoList()) {
+                            if(cFunc.getName().equals(func)) {
+                                node.setProperty("belongTo", cFunc.getBelongTo());
+                                node.setProperty("fullParams", cFunc.getFullParams());
+                                node.setProperty("isInline", cFunc.getIsInline());
+                                node.setProperty("isConst", cFunc.getIsConst());
+                                node.setProperty("isDefine", cFunc.getIsDefine());
+                                break;
+                            }
+                        }
+                    }
+                }
+            });
+            for(Map.Entry entry: addInvokeFunctions.entrySet()) {
+                String funcName = (String) entry.getKey();
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_function{name:'" + funcName + "'})" +
+                        "return m";
+                Result result = db.execute(cql);
+                if(result.hasNext()) {
+                    Map<String, Object> row = result.next();
+                    Node node = null;
+                    for(String key: result.columns()) {
+                        // 找到函数实体
+                        node = (Node) row.get(key);
+                    }
+                    for(CFunctionInfo cFunc: codeFileInfo.getFunctionInfoList()) {
+                        if (cFunc.getName().equals(funcName)) {
+                            // 获取候选文件列表
+                            List<String> fileList = codeFileInfo.getIncludeCodeFileList();
+                            fileList.add(fileName);
+                            // 处理每个调用函数: invokeFunc
+                            for(String invokeFunc: cFunc.getCallFunctionNameList()) {
+                                // 从所有可能的代码文件中查找函数
+                                for(String name: fileList) {
+                                    // 根据文件名和函数名定位到被调用的函数实体
+                                    cql = "match (n:c_code_file)" +
+                                            "-[:define]->" +
+                                            "(m:c_function)" +
+                                            "where n.fileName contains '" + name + "' " +
+                                            "and m.name = '" + invokeFunc + "' " +
+                                            "return m";
+                                    Result res = db.execute(cql);
+                                    if(res.hasNext()) {
+                                        // 找到调用的函数实体
+                                        row = res.next();
+                                        for(String k: res.columns()) {
+                                            Node n = (Node) row.get(k);
+                                            node.createRelationshipTo(n, CExtractor.invoke);
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+            }
+            for(Map.Entry entry: deleteInvokeFunctions.entrySet()) {
+                String funcName = (String) entry.getKey();
+                List<String> invokeFunctions = (List<String>) entry.getValue();
+                for(String invokeFunc: invokeFunctions) {
+                    String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                            "-[:define]->" +
+                            "(m:c_function{name:'" + funcName + "'})" +
+                            "-[r:invoke]->" +
+                            "(o:c_function{name:'" + invokeFunc + "'})" +
+                            "delete r";
+                    db.execute(cql);
+                }
+            }
             tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
+    }
+
+    /**
+     * 建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
+     */
+    private void createRelationships() {
+
     }
 
     /**
