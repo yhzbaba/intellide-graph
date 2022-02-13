@@ -16,7 +16,6 @@ import com.github.gumtreediff.matchers.Matchers;
 import com.github.gumtreediff.tree.Tree;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.core.runtime.CoreException;
-import org.jsoup.nodes.Entities;
 import org.neo4j.graphdb.GraphDatabaseService;
 import org.neo4j.graphdb.Node;
 import org.neo4j.graphdb.Result;
@@ -58,7 +57,7 @@ public class GraphUpdate extends KnowledgeExtractor {
 
     /*
      * 记录修改涉及到的代码信息，主要是元素名称，与 CCodeFileInfo 中的信息进行匹配
-     * struct 和 function 的修改包括两类：内部成员的增删、标识符等属性的修改
+     * struct 和 function 的修改包括两类：内部成员的增删(map)、标识符等属性的修改(set)
      * 每次处理文件前需要初始化
      */
     private Set<String> addIncludes = new HashSet<>();
@@ -124,14 +123,14 @@ public class GraphUpdate extends KnowledgeExtractor {
             /* 以单个文件作为单位进行处理，首先进行初始化工作 */
 
             // 获取文件名
-            String fileName = getFileFromDiff(diff);
+            String fileName = Utils.getFileFromDiff(diff);
             // TODO: 这里后期要改成项目代码的路径
             String srcFile = "" + fileName;
             String dstFile = "" + fileName;
 
             // 将文件内容读入字符串
-            srcContent = getFileContent(srcFile);
-            dstContent = getFileContent(dstFile);
+            srcContent = Utils.getFileContent(srcFile);
+            dstContent = Utils.getFileContent(dstFile);
 
             // 解析被修改的代码文件(dstFile)
             IASTTranslationUnit translationUnit = null;
@@ -179,28 +178,7 @@ public class GraphUpdate extends KnowledgeExtractor {
         }
     }
 
-    /**
-     * 获取修改的代码文件名称
-     */
-    private static String getFileFromDiff(String diff) {
-        String res = "";
-        if(diff.contains(".c")) {
-            Pattern r = Pattern.compile("\\s\\w+.c");
-            Matcher m = r.matcher(diff);
-            if(m.find()) {
-                res = m.group().substring(1);
-            }
-        }
-        else {
-            Pattern r = Pattern.compile("\\s\\w+.h");
-            Matcher m = r.matcher(diff);
-            if(m.find()) {
-                res = m.group().substring(1);
-            }
-        }
-        return res;
-    }
-
+    
     /**
      * 对单个编辑动作进行解析，获取具体的修改内容
      * 对各类 edit action 进行分类，并针对性地记录
@@ -283,30 +261,30 @@ public class GraphUpdate extends KnowledgeExtractor {
                     if(editAction.content.get(i).contains("Include")) {
                         if(editAction.type.contains("insert")) {
                             // add include files
-                            addIncludes.add(getItemName(editAction.Start, editAction.End, dstContent, "Include"));
+                            addIncludes.add(Utils.getItemName(editAction.Start, editAction.End, dstContent, "Include"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteIncludes.add(getItemName(editAction.Start, editAction.End, srcContent, "Include"));
+                            deleteIncludes.add(Utils.getItemName(editAction.Start, editAction.End, srcContent, "Include"));
                         }
                         break;
                     }
                     else if(editAction.content.get(i).contains("DefineVar")) {
                         if(editAction.type.contains("insert")) {
                             // add Macro #define(as variable)
-                            addVariables.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroVar"));
+                            addVariables.add(Utils.getItemName(editAction.Start, editAction.End, dstContent, "MacroVar"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteVariables.add(getItemName(editAction.Start, editAction.End, srcContent, "MacroVar"));
+                            deleteVariables.add(Utils.getItemName(editAction.Start, editAction.End, srcContent, "MacroVar"));
                         }
                         break;
                     }
                     else if(editAction.content.get(i).contains("DefineFunc")) {
                         if(editAction.type.contains("insert")) {
                             // add Macro #define(as function)
-                            addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroFunc"));
+                            addFunctions.add(Utils.getItemName(editAction.Start, editAction.End, dstContent, "MacroFunc"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteVariables.add(getItemName(editAction.Start, editAction.End, srcContent, "MacroFunc"));
+                            deleteVariables.add(Utils.getItemName(editAction.Start, editAction.End, srcContent, "MacroFunc"));
                         }
                         break;
                     }
@@ -320,10 +298,10 @@ public class GraphUpdate extends KnowledgeExtractor {
                     if (editAction.content.get(i).contains("GenericString: typedef")) {
                         // typedef struct
                         if(editAction.type.contains("insert")) {
-                            addStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                            addStructs.add(Utils.getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                            deleteStructs.add(Utils.getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
                         }
                         isTypeDef = true;
                         break;
@@ -336,10 +314,10 @@ public class GraphUpdate extends KnowledgeExtractor {
                     if(tmp.contains("struct")) {
                         // struct(no typedef)
                         if(editAction.type.contains("insert")) {
-                            addStructs.add(getItemName(0, 0, tmp, "Struct"));
+                            addStructs.add(Utils.getItemName(0, 0, tmp, "Struct"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteStructs.add(getItemName(0, 0, tmp, "Struct"));
+                            deleteStructs.add(Utils.getItemName(0, 0, tmp, "Struct"));
                         }
                     }
                     else {
@@ -371,10 +349,10 @@ public class GraphUpdate extends KnowledgeExtractor {
                     if(editAction.content.get(i).contains("ParamList")) {
                         // function definition
                         if(editAction.type.contains("insert")) {
-                            addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
+                            addFunctions.add(Utils.getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
                         }
                         else if(editAction.type.contains("delete")) {
-                            deleteFunctions.add(getItemName(editAction.Start, editAction.End, srcContent, "FuncDef"));
+                            deleteFunctions.add(Utils.getItemName(editAction.Start, editAction.End, srcContent, "FuncDef"));
                         }
                         break;
                     }
@@ -398,7 +376,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         String Func = "";
                         if(editAction.type.contains("insert")) {
                             // 获取父结点的函数名称
-                            Func = getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
+                            Func = Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
                             if(addInvokeFunctions.containsKey(Func)) {
                                 addInvokeFunctions.get(Func).add(invokeFunc);
                             }
@@ -408,7 +386,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                             }
                         }
                         else if(editAction.type.contains("delete")) {
-                            Func = getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
+                            Func = Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
                             if(deleteInvokeFunctions.containsKey(Func)) {
                                 deleteInvokeFunctions.get(Func).add(invokeFunc);
                             }
@@ -422,10 +400,10 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
                 // 简单记录修改过的函数名称
                 if(editAction.type.contains("insert")) {
-                    updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
                 }
                 else if(editAction.type.contains("delete")) {
-                    updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
                 }
             }
             else if(editAction.tNode.contains("Storage")) {
@@ -438,82 +416,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
         }
     }
-
-    /**
-     * 利用位置索引获取代码片段，通过正则匹配或者截取子串得到修改代码元素的名称
-     * @param type 标识修改代码元素的类型，如 function, variable...
-     */
-    private String getItemName(int start, int end, String fileContent, String type) {
-        String res = "";
-        String tmp = "";
-        if(start == 0 && end == 0) tmp = fileContent;
-        else tmp = fileContent.substring(start, end);
-        if(type.equals("Include")) {
-            res = tmp.substring(tmp.indexOf("\"") + 1, tmp.lastIndexOf("\""));
-        }
-        else if(type.equals("MacroVar")) {
-            Matcher m = Pattern.compile("(\\s+)(\\w+)(\\s+)").matcher(tmp);
-            if(m.find()) {
-                res = m.group(2);
-            }
-        }
-        else if(type.equals("MacroFunc")) {
-            // format: function(param...)
-            Matcher m = Pattern.compile("(\\s+)([\\w_()]+)(\\s+)").matcher(tmp);
-            if(m.find()) {
-                res = m.group(2);
-            }
-        }
-        else if(type.equals("Typedef")) {
-            // format: GenericString: name [s,e]
-            Matcher m = Pattern.compile("\\s(\\w+)\\s\\[").matcher(tmp);
-            if(m.find()) {
-                res = m.group(1);
-            }
-        }
-        else if(type.equals("Struct")) {
-            Matcher m = Pattern.compile("struct\\s(\\w+)\\s").matcher(tmp);
-            if(m.find()) {
-                res = m.group(1);
-            }
-        }
-        else if(type.equals("FuncDef")) {
-            // TODO: 最好的处理是函数名称+参数列表，这里暂且只使用函数名
-            Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\)").matcher(tmp);
-            if(m.find()) {
-                res = m.group(1);
-            }
-        }
-        else if(type.equals("Function")) {
-            Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\)[\\n\\s]").matcher(tmp);
-            if(m.find()) {
-                res = m.group(1);
-            }
-        }
-        return res;
-    }
-
-    private static String getFileContent(String filePath) {
-        String res = "";
-        File file = new File(filePath);
-        FileReader reader = null;
-        try {
-            reader = new FileReader(file);
-            BufferedReader bReader = new BufferedReader(reader);
-            StringBuilder sb = new StringBuilder();
-            String s = "";
-            while ((s =bReader.readLine()) != null) {
-                sb.append(s + "\n");
-            }
-            bReader.close();
-            res = sb.toString();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return res;
-    }
+    
 
     /**
      * 更新图谱内容
