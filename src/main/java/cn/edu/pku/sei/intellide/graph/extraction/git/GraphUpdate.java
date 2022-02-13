@@ -17,6 +17,8 @@ import com.github.gumtreediff.matchers.Matchers;
 import com.github.gumtreediff.tree.Tree;
 import org.eclipse.cdt.core.dom.ast.IASTTranslationUnit;
 import org.eclipse.core.runtime.CoreException;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Transaction;
 
 import java.io.*;
 import java.util.*;
@@ -29,16 +31,16 @@ import java.util.regex.Pattern;
 public class GraphUpdate extends KnowledgeExtractor {
 
     public static void main(String[] args) {
-        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
-        String content = getFileContent(filePath);
-        int s = 73;
-        int e = 126;
-        System.out.println(content.substring(s,e));
-//        String s = "#define FD_ZERO(set) (((fd_set FAR *)(set))->fd_count=0)";
-//        Matcher m = Pattern.compile("(\\s+)([\\w_()]+)(\\s+)").matcher(s);
-//        if(m.find()) {
-//            System.out.println(m.group(2));
-//        }
+//        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
+//        String content = getFileContent(filePath);
+//        int s = 227;
+//        int e = 322;
+//        System.out.println(content.substring(s,e));
+        String s = "replace oldFunc by newFunc";
+        Matcher m = Pattern.compile("replace\\s(\\w+)\\sby\\s(\\w+)").matcher(s);
+        if(m.find()) {
+            System.out.println(m.group(1) + "\n" + m.group(2));
+        }
 //        String s = "int f;";
 //        System.out.println(s.substring(s.lastIndexOf(" "), s.indexOf(";")));
     }
@@ -65,7 +67,10 @@ public class GraphUpdate extends KnowledgeExtractor {
 
     private Set<String> addFunctions = new HashSet<>();
     private Set<String> deleteFunctions = new HashSet<>();
+    // updateFunctions 只是记录函数粒度的修改，不涉及具体修改，用于 commit-code relationship 建立
     private Set<String> updateFunctions = new HashSet<>();
+    private Map<String, Set<String>> addInvokeFunctions = new HashMap<>();
+    private Map<String, Set<String>> deleteInvokeFunctions = new HashMap<>();
     private Map<String, String> renameFunctions = new HashMap<>();
 
     // 记录单个 commit 修改的代码实体的id
@@ -162,6 +167,8 @@ public class GraphUpdate extends KnowledgeExtractor {
              * 完成单个文件的修改信息的记录，统一执行数据库事务进行图谱更新
              */
 
+            updateKG();
+
         }
     }
 
@@ -196,9 +203,11 @@ public class GraphUpdate extends KnowledgeExtractor {
         EditAction editAction = new EditAction();
         /* 父节点的类型和位置
          * 父结点通常是用于修改函数的定位
-         * 等同于调用两次 getParent()，由 Compound 得到 Definition
+         * 如果是 Compound，调用两次 getParent()，由 Compound 得到 Definition
          */
-        String pNode = Node.getParent().toString();
+        String pNode = Node.toString();
+        if(pNode.contains("Compound")) pNode = Node.getParent().toString();
+        else pNode = Node.toString();
         editAction.pNode = pNode.substring(0, pNode.indexOf(" "));
         editAction.pStart = Integer.parseInt(pNode.substring(pNode.indexOf("[") + 1, pNode.indexOf(",")));
         editAction.pEnd = Integer.parseInt(pNode.substring(pNode.indexOf(",") + 1, pNode.indexOf("]"))) - 1;
@@ -228,27 +237,55 @@ public class GraphUpdate extends KnowledgeExtractor {
 
     /**
      * 针对单个 action，依据 type 和 tNode 判断修改的具体类型，对 content 属性进行解析并记录
-     * @param editAction
+     * Tree Node Types: insert, delete, update, move
+     * Modified Object Types: CppTop, Declaration, Definition, ExprStatement, DeclList. Storage, ParameterType
      */
     private void parseActionContent(EditAction editAction) {
-        if(editAction.type.contains("insert")) {
-            // 依据 edit action 节点的类型进行相应的处理
+        // 依据 edit action 节点的类型进行相应的处理
+        if(editAction.type.contains("update")) {
+            if(editAction.pNode.equals("Definition")) {
+                // 函数更名
+                String tmp = editAction.content.get(0);
+                Matcher m = Pattern.compile("replace\\s(\\w+)\\sby\\s(\\w+)").matcher(tmp);
+                if(m.find()) {
+                    String oldFunc = m.group(1);
+                    String newFunc = m.group(2);
+                    renameFunctions.put(oldFunc, newFunc);
+                }
+            }
+        }
+        else {
             if(editAction.tNode.contains("CppTop")) {
                 int i = 0;
                 while(i < editAction.content.size()) {
                     if(editAction.content.get(i).contains("Include")) {
-                        // add include files
-                        addIncludes.add(getItemName(editAction.Start, editAction.End, dstContent, "Include"));
+                        if(editAction.type.contains("insert")) {
+                            // add include files
+                            addIncludes.add(getItemName(editAction.Start, editAction.End, dstContent, "Include"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteIncludes.add(getItemName(editAction.Start, editAction.End, srcContent, "Include"));
+                        }
                         break;
                     }
                     else if(editAction.content.get(i).contains("DefineVar")) {
-                        // add Macro #define(as variable)
-                        addVariables.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroVar"));
+                        if(editAction.type.contains("insert")) {
+                            // add Macro #define(as variable)
+                            addVariables.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroVar"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteVariables.add(getItemName(editAction.Start, editAction.End, srcContent, "MacroVar"));
+                        }
                         break;
                     }
                     else if(editAction.content.get(i).contains("DefineFunc")) {
-                        // add Macro #define(as function)
-                        addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroFunc"));
+                        if(editAction.type.contains("insert")) {
+                            // add Macro #define(as function)
+                            addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "MacroFunc"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteVariables.add(getItemName(editAction.Start, editAction.End, srcContent, "MacroFunc"));
+                        }
                         break;
                     }
                     i++;
@@ -260,26 +297,48 @@ public class GraphUpdate extends KnowledgeExtractor {
                 while(i < editAction.content.size()) {
                     if (editAction.content.get(i).contains("GenericString: typedef")) {
                         // typedef struct
-                        addStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                        if(editAction.type.contains("insert")) {
+                            addStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteStructs.add(getItemName(0, 0, editAction.content.get(i + 1), "Typedef"));
+                        }
                         isTypeDef = true;
                         break;
                     }
                 }
                 if(!isTypeDef) {
-                    String tmp = dstContent.substring(editAction.Start, editAction.End);
+                    String tmp = "";
+                    if(editAction.type.contains("insert")) tmp = dstContent.substring(editAction.Start, editAction.End);
+                    else if(editAction.type.contains("delete")) tmp = srcContent.substring(editAction.Start, editAction.End);
                     if(tmp.contains("struct")) {
                         // struct(no typedef)
-                        addStructs.add(getItemName(0, 0, tmp, "Struct"));
+                        if(editAction.type.contains("insert")) {
+                            addStructs.add(getItemName(0, 0, tmp, "Struct"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteStructs.add(getItemName(0, 0, tmp, "Struct"));
+                        }
                     }
                     else {
                         Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\);").matcher(tmp);
                         if(m.find()) {
                             // function declaration
-                            addFunctions.add(m.group(1));
+                            if(editAction.type.contains("insert")) {
+                                addFunctions.add(m.group(1));
+                            }
+                            else if(editAction.type.contains("delete")) {
+                                deleteFunctions.add(m.group(1));
+                            }
                         }
                         else {
                             // global variable
-                            addVariables.add(tmp.substring(tmp.lastIndexOf(" ")+1, tmp.indexOf(";")));
+                            if(editAction.type.contains("insert")) {
+                                addVariables.add(tmp.substring(tmp.lastIndexOf(" ")+1, tmp.indexOf(";")));
+                            }
+                            else if(editAction.type.contains("delete")) {
+                                deleteVariables.add(tmp.substring(tmp.lastIndexOf(" ")+1, tmp.indexOf(";")));
+                            }
                         }
                     }
                 }
@@ -289,28 +348,72 @@ public class GraphUpdate extends KnowledgeExtractor {
                 while(i < editAction.content.size()) {
                     if(editAction.content.get(i).contains("ParamList")) {
                         // function definition
-                        addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
+                        if(editAction.type.contains("insert")) {
+                            addFunctions.add(getItemName(editAction.Start, editAction.End, dstContent, "FuncDef"));
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            deleteFunctions.add(getItemName(editAction.Start, editAction.End, srcContent, "FuncDef"));
+                        }
                         break;
                     }
                 }
             }
-            else if(editAction.tNode.contains("ExprStatement")) {
-                // e.g. 全局变量的赋值语句，只需要获得父结点，即上一级的函数名称，但现在只有 Compound
-                updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
+            /* 函数内部的修改
+             * 依照目前的处理，主要是方法调用的增删，标识符的修改，参数列表的修改
+             * Map<FunctionName, List<invokedFunctions> >
+             * TODO: 修改的内容最好尽可能地细化，相应用于记录的数据结构也要修改
+             */
+            else if(editAction.tNode.contains("ExprStatement") || editAction.tNode.contains("DeclList")) {
+                /* 函数内部的修改语句
+                 * e.g. 包含了函数调用的赋值语句，单纯的函数调用
+                 */
+                int i = 0;
+                while(i < editAction.content.size()) {
+                    if(editAction.content.get(i).contains("FunCall")) {
+                        // 函数内有调用函数的修改
+                        String invokeFunc = editAction.content.get(i+2);
+                        invokeFunc = invokeFunc.substring(invokeFunc.indexOf(":")+2, invokeFunc.indexOf("[")-1);
+                        String Func = "";
+                        if(editAction.type.contains("insert")) {
+                            // 获取父结点的函数名称
+                            Func = getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
+                            if(addInvokeFunctions.containsKey(Func)) {
+                                addInvokeFunctions.get(Func).add(invokeFunc);
+                            }
+                            else {
+                                addInvokeFunctions.put(Func, new HashSet<>());
+                                addInvokeFunctions.get(Func).add(invokeFunc);
+                            }
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            Func = getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
+                            if(deleteInvokeFunctions.containsKey(Func)) {
+                                deleteInvokeFunctions.get(Func).add(invokeFunc);
+                            }
+                            else {
+                                deleteInvokeFunctions.put(Func, new HashSet<>());
+                                deleteInvokeFunctions.get(Func).add(invokeFunc);
+                            }
+                        }
+                        break;
+                    }
+                }
+                // 简单记录修改过的函数名称
+                if(editAction.type.contains("insert")) {
+                    updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
+                }
+                else if(editAction.type.contains("delete")) {
+                    updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
+                }
             }
-            else if(editAction.tNode.contains("DeclList")) {
-                // 函数内部表达式
-                updateFunctions.add(getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
+            else if(editAction.tNode.contains("Storage")) {
+                // 函数标识符的修改
+
             }
-        }
-        else if(editAction.type.contains("delete")) {
+            else if(editAction.tNode.contains("ParameterType")) {
+                // 函数参数列表的修改
 
-        }
-        else if(editAction.type.contains("update")) {
-
-        }
-        else if(editAction.type.contains("move")) {
-
+            }
         }
     }
 
@@ -388,6 +491,18 @@ public class GraphUpdate extends KnowledgeExtractor {
             e.printStackTrace();
         }
         return res;
+    }
+
+    /**
+     * 更新图谱内容，同时建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
+     */
+    private void updateKG() {
+        GraphDatabaseService db = this.getDb();
+        try(Transaction tx = db.beginTx()) {
+
+
+            tx.success();
+        }
     }
 
     /**
