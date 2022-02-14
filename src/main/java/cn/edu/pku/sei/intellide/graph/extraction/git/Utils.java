@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
 import java.io.*;
+import java.util.HashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -107,4 +108,26 @@ public class Utils {
         return res;
     }
 
+    /**
+     * 向上回溯找到函数定义的父结点
+     * e.g. FunCall -> Assignment -> Some -> ExprStatement -> Compound -> Definition
+     */
+    public static String getFunctionFromDef(GraphUpdate.EditAction editAction, String srcContent, String dstContent) {
+        String res = "";
+        String tmp = editAction.Node.toString();
+        while(!tmp.contains("Definition")) {
+            editAction.Node = editAction.Node.getParent();
+            tmp = editAction.Node.toString();
+        }
+        editAction.pNode = tmp.substring(0, tmp.indexOf(" "));
+        editAction.pStart = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
+        editAction.pEnd = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
+        if(editAction.type.contains("insert")) {
+            res = Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
+        }
+        else if(editAction.type.contains("delete")) {
+            res = Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
+        }
+        return res;
+    }
 }

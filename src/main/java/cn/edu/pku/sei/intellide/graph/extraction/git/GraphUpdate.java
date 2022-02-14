@@ -272,6 +272,7 @@ public class GraphUpdate extends KnowledgeExtractor {
         }
         else {
             if(editAction.tNode.contains("CppTop")) {
+                // Macro, include
                 int i = 0;
                 while(i < editAction.content.size()) {
                     if(editAction.content.get(i).contains("Include")) {
@@ -308,6 +309,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
             }
             else if(editAction.tNode.contains("Declaration")) {
+                // struct, variable, function (global declaration)
                 int i = 0;
                 boolean isTypeDef = false;
                 while(i < editAction.content.size()) {
@@ -360,6 +362,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
             }
             else if(editAction.tNode.contains("Definition")) {
+                // function definition
                 int i = 0;
                 while(i < editAction.content.size()) {
                     if(editAction.content.get(i).contains("ParamList")) {
@@ -376,8 +379,6 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
             /* 函数内部的修改
              * 依照目前的处理，主要是方法调用的增删，标识符的修改，参数列表的修改
-             * Map<FunctionName, List<invokedFunctions> >
-             * TODO: 修改的内容最好尽可能地细化，相应用于记录的数据结构也要修改
              */
             else if(editAction.tNode.contains("ExprStatement") || editAction.tNode.contains("DeclList")) {
                 /* 函数内部的修改语句
@@ -414,13 +415,6 @@ public class GraphUpdate extends KnowledgeExtractor {
                         break;
                     }
                 }
-                // 简单记录修改过的函数名称
-                if(editAction.type.contains("insert")) {
-                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef"));
-                }
-                else if(editAction.type.contains("delete")) {
-                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
-                }
             }
             else if(editAction.tNode.contains("Storage")) {
                 // 函数/变量标识符的修改
@@ -433,37 +427,13 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
             else if(editAction.tNode.contains("ParameterType")) {
                 // 函数参数列表的修改
-                String tmp = editAction.Node.toString();
-                while(!tmp.contains("Definition")) {
-                    editAction.Node = editAction.Node.getParent();
-                    tmp = editAction.Node.toString();
-                }
-                editAction.pNode = tmp.substring(0, tmp.indexOf(" "));
-                editAction.pStart = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
-                editAction.pEnd = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
-                if(editAction.tNode.contains("insert")) {
-                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef"));
-                }
-                else if(editAction.type.contains("delete")) {
-                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
-                }
+                String func = Utils.getFunctionFromDef(editAction, srcContent, dstContent);
+                updateFunctions.add(func);
             }
             else if(editAction.tNode.contains("FunCall")) {
                 // 函数内调用
-
-                /* 向上回溯找到函数定义的父结点
-                 * e.g. FunCall -> Assignment -> Some -> ExprStatement -> Compound -> Definition
-                 */
-                String tmp = editAction.Node.toString();
-                while(!tmp.contains("Definition")) {
-                    editAction.Node = editAction.Node.getParent();
-                    tmp = editAction.Node.toString();
-                }
-                editAction.pNode = tmp.substring(0, tmp.indexOf(" "));
-                editAction.pStart = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
-                editAction.pEnd = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
                 if(editAction.type.contains("insert")) {
-                    String func = Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
+                    String func = Utils.getFunctionFromDef(editAction, srcContent, dstContent);
                     String invokeFunc = dstContent.substring(editAction.Start, editAction.End);
                     invokeFunc = invokeFunc.substring(0, invokeFunc.indexOf("("));
                     if(addInvokeFunctions.containsKey(func)) {
@@ -475,8 +445,8 @@ public class GraphUpdate extends KnowledgeExtractor {
                     }
                 }
                 else if(editAction.type.contains("delete")) {
-                    String func = Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
-                    String invokeFunc = dstContent.substring(editAction.Start, editAction.End);
+                    String func = Utils.getFunctionFromDef(editAction, srcContent, dstContent);
+                    String invokeFunc = srcContent.substring(editAction.Start, editAction.End);
                     invokeFunc = invokeFunc.substring(0, invokeFunc.indexOf("("));
                     if(deleteInvokeFunctions.containsKey(func)) {
                         deleteInvokeFunctions.get(func).add(invokeFunc);
@@ -484,6 +454,36 @@ public class GraphUpdate extends KnowledgeExtractor {
                     else {
                         deleteInvokeFunctions.put(func, new HashSet<>());
                         deleteInvokeFunctions.get(func).add(invokeFunc);
+                    }
+                }
+            }
+            else if(editAction.tNode.contains("Binary")) {
+                // 条件语句 if, while
+                int i = 0;
+                while(i < editAction.content.size()) {
+                    if(editAction.content.get(i).contains("FunCall")) {
+                        String invokeFunc = editAction.content.get(i + 2);
+                        invokeFunc = invokeFunc.substring(invokeFunc.indexOf(":")+2, invokeFunc.indexOf("[")-1);
+                        String func = Utils.getFunctionFromDef(editAction, srcContent, dstContent);
+                        if(editAction.type.contains("insert")) {
+                            if(addInvokeFunctions.containsKey(func)) {
+                                addInvokeFunctions.get(func).add(invokeFunc);
+                            }
+                            else {
+                                addInvokeFunctions.put(func, new HashSet<>());
+                                addInvokeFunctions.get(func).add(invokeFunc);
+                            }
+                        }
+                        else if(editAction.type.contains("delete")) {
+                            if(deleteInvokeFunctions.containsKey(func)) {
+                                deleteInvokeFunctions.get(func).add(invokeFunc);
+                            }
+                            else {
+                                deleteInvokeFunctions.put(func, new HashSet<>());
+                                deleteInvokeFunctions.get(func).add(invokeFunc);
+                            }
+                        }
+                        break;
                     }
                 }
             }
