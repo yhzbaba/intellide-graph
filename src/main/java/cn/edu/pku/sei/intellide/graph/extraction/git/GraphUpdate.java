@@ -113,7 +113,14 @@ public class GraphUpdate extends KnowledgeExtractor {
 
 
     private void initDS() {
+        addIncludes.clear(); deleteIncludes.clear();
+        addVariables.clear(); deleteVariables.clear(); updateVariables.clear();
+        addStructs.clear(); deleteStructs.clear(); updateStructs.clear();
+        addStructMembers.clear(); deleteStructMembers.clear();
+        addFunctions.clear(); deleteFunctions.clear(); updateFunctions.clear();
+        addInvokeFunctions.clear(); deleteInvokeFunctions.clear(); renameFunctions.clear();
 
+        updateEntities.clear(); addEntities.clear();
     }
 
     /**
@@ -675,6 +682,22 @@ public class GraphUpdate extends KnowledgeExtractor {
                     }
                 }
             });
+            for(Map.Entry entry: renameFunctions.entrySet()) {
+                String oldFunc = (String) entry.getKey();
+                String newFunc = (String) entry.getValue();
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_function{name:'" + oldFunc + "'})" +
+                        "return m";
+                Result result = db.execute(cql);
+                if(result.hasNext()) {
+                    Map<String, Object> row = result.next();
+                    for (String key : result.columns()) {
+                        Node node = (Node) row.get(key);
+                        node.setProperty("name", newFunc);
+                    }
+                }
+            }
             for(Map.Entry entry: addInvokeFunctions.entrySet()) {
                 String funcName = (String) entry.getKey();
                 String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
@@ -720,7 +743,6 @@ public class GraphUpdate extends KnowledgeExtractor {
                         }
                     }
                 }
-
             }
             for(Map.Entry entry: deleteInvokeFunctions.entrySet()) {
                 String funcName = (String) entry.getKey();
