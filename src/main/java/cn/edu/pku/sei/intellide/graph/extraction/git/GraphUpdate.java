@@ -32,22 +32,22 @@ import java.util.regex.Pattern;
 public class GraphUpdate extends KnowledgeExtractor {
 
     public static void main(String[] args) {
-        String cFunc = "main";
-        String cql = "match (n:c_code_file)" +
-                "-[:define]->" +
-                "where n.fileName contains '" + cFunc + "'" +
-                "return m";
-        System.out.println(cql);
-//        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
-//        String content = getFileContent(filePath);
-//        int s = 227;
-//        int e = 322;
-//        System.out.println(content.substring(s,e));
-//        String s = "replace oldFunc by newFunc";
-//        Matcher m = Pattern.compile("replace\\s(\\w+)\\sby\\s(\\w+)").matcher(s);
-//        if(m.find()) {
-//            System.out.println(m.group(1) + "\n" + m.group(2));
-//        }
+//        String cFunc = "main";
+//        String cql = "match (n:c_code_file)" +
+//                "-[:define]->" +
+//                "where n.fileName contains '" + cFunc + "'" +
+//                "return m";
+//        System.out.println(cql);
+        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
+        String content = Utils.getFileContent(filePath);
+        int s = 65;
+        int e = 81;
+        System.out.println(content.substring(s,e));
+        String ss = content.substring(s,e);
+        Matcher m = Pattern.compile("#define\\s(\\w+)\\s").matcher(ss);
+            if(m.find()) {
+                System.out.println(m.group(1));
+            }
     }
 
     private Map<String, GitUpdate.CommitInfo> commitInfos;
@@ -133,6 +133,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             if(!diff.contains(".c") || !diff.contains(".h")) continue;
 
             /* 以单个文件作为单位进行处理，首先进行初始化工作 */
+            initDS();
 
             // 获取文件名
             String fileName = Utils.getFileFromDiff(diff);
@@ -204,6 +205,7 @@ public class GraphUpdate extends KnowledgeExtractor {
          * 父结点通常是用于修改函数的定位
          * 如果是 Compound，调用两次 getParent()，由 Compound 得到 Definition
          */
+        editAction.Node = Node;
         String pNode = Node.toString();
         if(pNode.contains("Compound")) pNode = Node.getParent().toString();
         else pNode = Node.toString();
@@ -414,7 +416,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
                 // 简单记录修改过的函数名称
                 if(editAction.type.contains("insert")) {
-                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "Function"));
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef"));
                 }
                 else if(editAction.type.contains("delete")) {
                     updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
@@ -422,11 +424,68 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
             else if(editAction.tNode.contains("Storage")) {
                 // 函数/变量标识符的修改
-
+                if(editAction.tNode.contains("insert")) {
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef"));
+                }
+                else if(editAction.type.contains("delete")) {
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
+                }
             }
             else if(editAction.tNode.contains("ParameterType")) {
                 // 函数参数列表的修改
+                String tmp = editAction.Node.toString();
+                while(!tmp.contains("Definition")) {
+                    editAction.Node = editAction.Node.getParent();
+                    tmp = editAction.Node.toString();
+                }
+                editAction.pNode = tmp.substring(0, tmp.indexOf(" "));
+                editAction.pStart = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
+                editAction.pEnd = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
+                if(editAction.tNode.contains("insert")) {
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef"));
+                }
+                else if(editAction.type.contains("delete")) {
+                    updateFunctions.add(Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef"));
+                }
+            }
+            else if(editAction.tNode.contains("FunCall")) {
+                // 函数内调用
 
+                /* 向上回溯找到函数定义的父结点
+                 * e.g. FunCall -> Assignment -> Some -> ExprStatement -> Compound -> Definition
+                 */
+                String tmp = editAction.Node.toString();
+                while(!tmp.contains("Definition")) {
+                    editAction.Node = editAction.Node.getParent();
+                    tmp = editAction.Node.toString();
+                }
+                editAction.pNode = tmp.substring(0, tmp.indexOf(" "));
+                editAction.pStart = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
+                editAction.pEnd = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
+                if(editAction.type.contains("insert")) {
+                    String func = Utils.getItemName(editAction.pStart, editAction.pEnd, dstContent, "FuncDef");
+                    String invokeFunc = dstContent.substring(editAction.Start, editAction.End);
+                    invokeFunc = invokeFunc.substring(0, invokeFunc.indexOf("("));
+                    if(addInvokeFunctions.containsKey(func)) {
+                        addInvokeFunctions.get(func).add(invokeFunc);
+                    }
+                    else {
+                        addInvokeFunctions.put(func, new HashSet<>());
+                        addInvokeFunctions.get(func).add(invokeFunc);
+                    }
+                }
+                else if(editAction.type.contains("delete")) {
+                    String func = Utils.getItemName(editAction.pStart, editAction.pEnd, srcContent, "FuncDef");
+                    String invokeFunc = dstContent.substring(editAction.Start, editAction.End);
+                    invokeFunc = invokeFunc.substring(0, invokeFunc.indexOf("("));
+                    if(deleteInvokeFunctions.containsKey(func)) {
+                        deleteInvokeFunctions.get(func).add(invokeFunc);
+                    }
+                    else {
+                        deleteInvokeFunctions.put(func, new HashSet<>());
+                        deleteInvokeFunctions.get(func).add(invokeFunc);
+                    }
+                }
             }
         }
     }
@@ -795,6 +854,7 @@ public class GraphUpdate extends KnowledgeExtractor {
         int Start, End;
 
         // 修改节点的父结点及始末位置
+        Tree Node;
         String pNode;
         int pStart, pEnd;
 

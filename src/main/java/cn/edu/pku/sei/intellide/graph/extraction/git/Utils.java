@@ -63,26 +63,28 @@ public class Utils {
             res = tmp.substring(tmp.indexOf("\"") + 1, tmp.lastIndexOf("\""));
         }
         else if(type.equals("MacroVar")) {
-            Matcher m = Pattern.compile("(\\s+)(\\w+)(\\s+)").matcher(tmp);
+            Matcher m = Pattern.compile("#define\\s(\\w+)\\s").matcher(tmp);
             if(m.find()) {
                 res = m.group(2);
             }
         }
         else if(type.equals("MacroFunc")) {
             // format: function(param...)
-            Matcher m = Pattern.compile("(\\s+)([\\w_()]+)(\\s+)").matcher(tmp);
+            Matcher m = Pattern.compile("#define\\s(\\w+)\\(").matcher(tmp);
             if(m.find()) {
                 res = m.group(2);
             }
         }
         else if(type.equals("Typedef")) {
             // format: GenericString: name [s,e]
+            // typedef struct { } name;
             Matcher m = Pattern.compile("\\s(\\w+)\\s\\[").matcher(tmp);
             if(m.find()) {
                 res = m.group(1);
             }
         }
         else if(type.equals("Struct")) {
+            // struct { };
             Matcher m = Pattern.compile("struct\\s(\\w+)\\s").matcher(tmp);
             if(m.find()) {
                 res = m.group(1);
@@ -90,6 +92,7 @@ public class Utils {
         }
         else if(type.equals("FuncDef")) {
             // TODO: 最好的处理是函数名称+参数列表，这里暂且只使用函数名
+            // modifier/type name(params...)
             Matcher m = Pattern.compile("\\w+\\s(\\w+)\\(.*\\)").matcher(tmp);
             if(m.find()) {
                 res = m.group(1);
