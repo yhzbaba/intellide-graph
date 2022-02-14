@@ -111,6 +111,11 @@ public class GraphUpdate extends KnowledgeExtractor {
         }
     }
 
+
+    private void initDS() {
+
+    }
+
     /**
      * 处理 diffSummary 包含的文件
      * @param commitInfo 单个commit涉及的所有修改文件
@@ -174,6 +179,8 @@ public class GraphUpdate extends KnowledgeExtractor {
              */
 
             updateKG(codeFileInfo, fileName, commitId);
+
+            createRelationships(commitId);
 
         }
     }
@@ -737,8 +744,22 @@ public class GraphUpdate extends KnowledgeExtractor {
     /**
      * 建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
      */
-    private void createRelationships() {
-
+    private void createRelationships(long commitId) {
+        GraphDatabaseService db = this.getDb();
+        try (Transaction tx = db.beginTx()) {
+            Node commitNode = db.getNodeById(commitId);
+            addEntities.forEach(id -> {
+                Node node = db.getNodeById(id);
+                commitNode.createRelationshipTo(node, CCodeMentionExtractor.ADD);
+            });
+            updateEntities.forEach(id -> {
+                Node node = db.getNodeById(id);
+                commitNode.createRelationshipTo(node, CCodeMentionExtractor.UPDATE);
+            });
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
