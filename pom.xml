@@ -251,7 +251,7 @@
             <artifactId>javafx</artifactId>
             <version>2.0</version>
             <scope>system</scope>
-            <systemPath>D:\Java\jdk1.8.0\jre\lib\ext\jfxrt.jar</systemPath>
+            <systemPath>D:\Documents\GradProject\jfxrt.jar</systemPath>
         </dependency>
     </dependencies>
 

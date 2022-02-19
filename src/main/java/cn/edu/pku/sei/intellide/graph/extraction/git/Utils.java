@@ -66,14 +66,14 @@ public class Utils {
         else if(type.equals("MacroVar")) {
             Matcher m = Pattern.compile("#define\\s(\\w+)\\s").matcher(tmp);
             if(m.find()) {
-                res = m.group(2);
+                res = m.group(1);
             }
         }
         else if(type.equals("MacroFunc")) {
             // format: function(param...)
             Matcher m = Pattern.compile("#define\\s(\\w+)\\(").matcher(tmp);
             if(m.find()) {
-                res = m.group(2);
+                res = m.group(1);
             }
         }
         else if(type.equals("Typedef")) {

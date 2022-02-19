@@ -28,26 +28,23 @@ import java.util.regex.Pattern;
 
 /**
  * 根据 commit 信息更新代码图谱，在 GitUpdate.java 中被调用
+ * FIXME:
+ * - #define 变量 cdt 没有识别出来
+ *
  */
 public class GraphUpdate extends KnowledgeExtractor {
 
     public static void main(String[] args) {
-//        String cFunc = "main";
-//        String cql = "match (n:c_code_file)" +
-//                "-[:define]->" +
-//                "where n.fileName contains '" + cFunc + "'" +
-//                "return m";
-//        System.out.println(cql);
-        String filePath = "D:\\documents\\SoftwareReuse\\knowledgeGraph\\gradDesign\\test2.c";
-        String content = Utils.getFileContent(filePath);
-        int s = 65;
-        int e = 81;
-        System.out.println(content.substring(s,e));
-        String ss = content.substring(s,e);
-        Matcher m = Pattern.compile("#define\\s(\\w+)\\s").matcher(ss);
-            if(m.find()) {
-                System.out.println(m.group(1));
-            }
+//        String filePath = "D:\\Documents\\GradProject\\test2.c";
+//        String content = Utils.getFileContent(filePath);
+//        int s = 65;
+//        int e = 81;
+//        System.out.println(content.substring(s,e));
+//        String ss = content.substring(s,e);
+//        Matcher m = Pattern.compile("#define\\s(\\w+)\\s").matcher(ss);
+//            if(m.find()) {
+//                System.out.println(m.group(1));
+//            }
     }
 
     private Map<String, GitUpdate.CommitInfo> commitInfos;
@@ -149,9 +146,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             IASTTranslationUnit translationUnit = null;
             try {
                 translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(dstFile));
-            } catch (CoreException e) {
-                e.printStackTrace();
-            } catch (IOException e) {
+            } catch (CoreException | IOException e) {
                 e.printStackTrace();
             }
             CCodeFileInfo codeFileInfo = new CCodeFileInfo(fileName, dstFile, translationUnit);
@@ -188,7 +183,7 @@ public class GraphUpdate extends KnowledgeExtractor {
 
             updateKG(codeFileInfo, fileName, commitId);
 
-            createRelationships(commitId);
+            createRelationships(commitId, fileName);
 
         }
     }
@@ -211,7 +206,7 @@ public class GraphUpdate extends KnowledgeExtractor {
         else pNode = Node.toString();
         editAction.pNode = pNode.substring(0, pNode.indexOf(" "));
         editAction.pStart = Integer.parseInt(pNode.substring(pNode.indexOf("[") + 1, pNode.indexOf(",")));
-        editAction.pEnd = Integer.parseInt(pNode.substring(pNode.indexOf(",") + 1, pNode.indexOf("]"))) - 1;
+        editAction.pEnd = Integer.parseInt(pNode.substring(pNode.indexOf(",") + 1, pNode.indexOf("]")));
         String[] lines = action.toString().split("\n");
         int i = 0;
         while(i < lines.length) {
@@ -220,7 +215,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                 String tmp = lines[i];
                 editAction.tNode = tmp.substring(0, tmp.indexOf(" "));
                 editAction.Start = Integer.parseInt(tmp.substring(tmp.indexOf("[") + 1, tmp.indexOf(",")));
-                editAction.End = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]"))) - 1;
+                editAction.End = Integer.parseInt(tmp.substring(tmp.indexOf(",") + 1, tmp.indexOf("]")));
                 i++;
             }
             else if(lines[i].equals("to")) {
@@ -324,6 +319,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         isTypeDef = true;
                         break;
                     }
+                    i++;
                 }
                 if(!isTypeDef) {
                     String tmp = "";
@@ -375,6 +371,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         }
                         break;
                     }
+                    i++;
                 }
             }
             /* 函数内部的修改
@@ -414,6 +411,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         }
                         break;
                     }
+                    i++;
                 }
             }
             else if(editAction.tNode.contains("Storage")) {
@@ -485,6 +483,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         }
                         break;
                     }
+                    i++;
                 }
             }
         }
@@ -538,7 +537,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                                 "(m:c_variable{name:'" + cVar.getName() + "'})" +
                                 "detach delete m";
                         db.execute(cql);
-                        // TODO: 删除操作实体不存在，如何建立关系？
+                        // TODO: 删除操作实体不存在，是否需要建立关系以及如何建立关系？
                         break;
                     }
                 }
@@ -825,12 +824,14 @@ public class GraphUpdate extends KnowledgeExtractor {
     /**
      * 建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
      */
-    private void createRelationships(long commitId) {
+    private void createRelationships(long commitId, String fileName) {
         GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
+            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
             Node commitNode = db.getNodeById(commitId);
             addEntities.forEach(id -> {
                 Node node = db.getNodeById(id);
+                fileNode.createRelationshipTo(node, CExtractor.define);
                 commitNode.createRelationshipTo(node, CCodeMentionExtractor.ADD);
             });
             updateEntities.forEach(id -> {
@@ -846,7 +847,7 @@ public class GraphUpdate extends KnowledgeExtractor {
     /**
      * 定义类 edit action
      */
-    class EditAction {
+    static class EditAction {
         String type;
 
         // 修改节点及始末位置
