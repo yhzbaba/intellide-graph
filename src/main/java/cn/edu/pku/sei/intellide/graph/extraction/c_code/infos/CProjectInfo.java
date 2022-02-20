@@ -32,7 +32,6 @@ public class CProjectInfo {
             if (file.isFile()){
                 // fullName 是项目路径下的文件路径+文件名称，可以唯一标识
                 String fileFullName = file.getAbsolutePath();
-                fileFullName = fileFullName.replace(dir, "").substring(1);
                 String fileName = file.getName();
                 if(fileName.contains(".")) {
                     String substring = fileName.substring(fileName.lastIndexOf("."));
@@ -44,6 +43,7 @@ public class CProjectInfo {
                 }
                 numberOfFiles++;
                 IASTTranslationUnit translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(fileFullName));
+//                fileFullName = fileFullName.replace(dir, "").substring(1);
                 CCodeFileInfo codeFileInfo = new CCodeFileInfo(inserter, fileFullName, fileName, translationUnit);
                 codeFileInfoMap.put(fileName, codeFileInfo);
             }

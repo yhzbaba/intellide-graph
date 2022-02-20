@@ -30,11 +30,23 @@ import java.util.regex.Pattern;
  * 根据 commit 信息更新代码图谱，在 GitUpdate.java 中被调用
  * FIXME:
  * - #define 变量 cdt 没有识别出来
- *
+ * - 执行 cypher 查找文件实体时的标识属性，文件的 fileName 应当设置为 项目内路径+tailFileName
+ * - struct 的 field member 没有抽取出来
+ * - updateKG 中的新增函数调用处理逻辑有些问题
  */
 public class GraphUpdate extends KnowledgeExtractor {
 
     public static void main(String[] args) {
+        Map<String, Set<String>> deleteInvokeFunctions = new HashMap<>();
+        deleteInvokeFunctions.put("func", new HashSet<>());
+        deleteInvokeFunctions.get("func").add("f");
+        for(Map.Entry entry: deleteInvokeFunctions.entrySet()) {
+            String funcName = (String) entry.getKey();
+            Set<String> invokeFunctions = (Set<String>) entry.getValue();
+            for(String s: invokeFunctions) {
+                System.out.println(s);
+            }
+        }
 //        String filePath = "D:\\Documents\\GradProject\\test2.c";
 //        String content = Utils.getFileContent(filePath);
 //        int s = 65;
@@ -503,13 +515,13 @@ public class GraphUpdate extends KnowledgeExtractor {
             // include files
             addIncludes.forEach(file -> {
                 String cql = "match (n:c_code_file{fileName:'" + fileName + "'}) " +
-                        "match (m:c_code_file{fileName:'" + file + "'}) " +
+                        "match (m:c_code_file{tailFileName:'" + file + "'}) " +
                         "create (n) -[:include]-> (m)";
                 db.execute(cql);
             });
             deleteIncludes.forEach(file -> {
                 String cql = "match (n:c_code_file{fileName: '" + fileName + "'}) " +
-                        "-[r:include]-> (m:c_code_file{fileName: '" + file + "'}) " +
+                        "-[r:include]-> (m:c_code_file{tailFileName: '" + file + "'}) " +
                         "delete r";
                 db.execute(cql);
             });
@@ -530,17 +542,11 @@ public class GraphUpdate extends KnowledgeExtractor {
                }
             });
             deleteVariables.forEach(var -> {
-                for(CVariableInfo cVar: codeFileInfo.getVariableInfoList()) {
-                    if(cVar.getName().equals(var)) {
-                        String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
-                                "-[:define]->" +
-                                "(m:c_variable{name:'" + cVar.getName() + "'})" +
-                                "detach delete m";
-                        db.execute(cql);
-                        // TODO: 删除操作实体不存在，是否需要建立关系以及如何建立关系？
-                        break;
-                    }
-                }
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_variable{name:'" + var + "'})" +
+                        "detach delete m";
+                db.execute(cql);
             });
             updateVariables.forEach(var -> {
                // TODO:是否需要考虑变量更名的操作
@@ -571,7 +577,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             addStructs.forEach(struct -> {
                 for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
                     if(cStruct.getName().equals(struct)) {
-                        Node node = db.createNode(CExtractor.c_variable);
+                        Node node = db.createNode(CExtractor.c_struct);
                         node.setProperty("name", cStruct.getName());
                         node.setProperty("typedefName", cStruct.getTypedefName());
                         node.setProperty("isEnum", cStruct.getIsEnum());
@@ -587,20 +593,19 @@ public class GraphUpdate extends KnowledgeExtractor {
                 }
             });
             deleteStructs.forEach(struct -> {
-                for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
-                    if(cStruct.getName().equals(struct)) {
-                        for(CFieldInfo field: cStruct.getFieldInfoList()) {
-                            String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
-                                    "-[:define]->" +
-                                    "(m:c_variable{name:'" + cStruct.getName() + "'})" +
-                                    "<-[r:member_of]-" +
-                                    "(o:c_field{name:" + field.getName() + "'})" +
-                                    "detach delete m, o";
-                            db.execute(cql);
-                        }
-                        break;
-                    }
-                }
+                String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_struct{name:'" + struct + "'})" +
+                        "<-[:member_of]-" +
+                        "(o:c_field) " +
+                        "detach delete m, o";
+                db.execute(cql);
+                // 防止 struct 没有 field 成员导致匹配失败
+                cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
+                        "-[:define]->" +
+                        "(m:c_struct{name:'" + struct + "'})" +
+                        "detach delete m";
+                db.execute(cql);
             });
             updateStructs.forEach(struct -> {
                 for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
@@ -758,6 +763,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
             for(Map.Entry entry: addInvokeFunctions.entrySet()) {
                 String funcName = (String) entry.getKey();
+                Set<String> invokeFunctions = (Set<String>) entry.getValue();
                 String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
                         "-[:define]->" +
                         "(m:c_function{name:'" + funcName + "'})" +
@@ -776,7 +782,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                             List<String> fileList = codeFileInfo.getIncludeCodeFileList();
                             fileList.add(fileName);
                             // 处理每个调用函数: invokeFunc
-                            for(String invokeFunc: cFunc.getCallFunctionNameList()) {
+                            for(String invokeFunc: invokeFunctions) {
                                 // 从所有可能的代码文件中查找函数
                                 for(String name: fileList) {
                                     // 根据文件名和函数名定位到被调用的函数实体
@@ -804,7 +810,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             }
             for(Map.Entry entry: deleteInvokeFunctions.entrySet()) {
                 String funcName = (String) entry.getKey();
-                List<String> invokeFunctions = (List<String>) entry.getValue();
+                Set<String> invokeFunctions = (Set<String>) entry.getValue();
                 for(String invokeFunc: invokeFunctions) {
                     String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
                             "-[:define]->" +
