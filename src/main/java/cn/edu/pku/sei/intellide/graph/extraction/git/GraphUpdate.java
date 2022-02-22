@@ -32,7 +32,6 @@ import java.util.regex.Pattern;
  * - #define 变量 cdt 没有识别出来
  * - 执行 cypher 查找文件实体时的标识属性，文件的 fileName 应当设置为 项目内路径+tailFileName
  * - struct 的 field member 没有抽取出来
- * - updateKG 中的新增函数调用处理逻辑有些问题
  */
 public class GraphUpdate extends KnowledgeExtractor {
 
@@ -576,7 +575,7 @@ public class GraphUpdate extends KnowledgeExtractor {
             // structs
             addStructs.forEach(struct -> {
                 for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
-                    if(cStruct.getName().equals(struct)) {
+                    if(cStruct.getName().equals(struct) || cStruct.getTypedefName().equals(struct)) {
                         Node node = db.createNode(CExtractor.c_struct);
                         node.setProperty("name", cStruct.getName());
                         node.setProperty("typedefName", cStruct.getTypedefName());
@@ -609,10 +608,11 @@ public class GraphUpdate extends KnowledgeExtractor {
             });
             updateStructs.forEach(struct -> {
                 for(CDataStructureInfo cStruct: codeFileInfo.getDataStructureList()) {
-                    if (cStruct.getName().equals(struct)) {
+                    if (cStruct.getName().equals(struct)  || cStruct.getTypedefName().equals(struct)) {
                         String cql = "match (n:c_code_file{fileName:'" + fileName + "'})" +
                                 "-[:define]->" +
-                                "(m:c_struct{name:'" + cStruct.getName() + "'})" +
+                                "(m:c_struct)" +
+                                "where m.name = '" + cStruct.getName() +"' or m.typedefName = '" + cStruct.getTypedefName() + "' " +
                                 "return m";
                         Result res = db.execute(cql);
                         while(res.hasNext()) {
@@ -680,7 +680,7 @@ public class GraphUpdate extends KnowledgeExtractor {
                         node.setProperty("name", cFunc.getName());
                         node.setProperty("fullName", cFunc.getFullName());
                         node.setProperty("belongTo", cFunc.getBelongTo());
-                        node.setProperty("fullParams", cFunc.getFullParams());
+                        node.setProperty("fullParams", cFunc.getFullParams().toString());
                         node.setProperty("isInline", cFunc.getIsInline());
                         node.setProperty("isConst", cFunc.getIsConst());
                         node.setProperty("isDefine", cFunc.getIsDefine());
