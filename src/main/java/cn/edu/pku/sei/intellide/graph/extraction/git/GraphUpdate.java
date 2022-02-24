@@ -60,6 +60,8 @@ public class GraphUpdate extends KnowledgeExtractor {
 
     private Map<String, GitUpdate.CommitInfo> commitInfos;
 
+    private String srcCodeDir;
+    private String dstCodeDir;
     private String srcContent;
     private String dstContent;
 
@@ -91,10 +93,11 @@ public class GraphUpdate extends KnowledgeExtractor {
     // 记录单个 commit 修改的代码实体的id
     Set<Long> updateEntities = new HashSet<>();
     Set<Long> addEntities = new HashSet<>();
-    Set<Long> deleteEntities = new HashSet<>();
 
-    public GraphUpdate(Map<String, GitUpdate.CommitInfo> commitInfos) {
+    public GraphUpdate(Map<String, GitUpdate.CommitInfo> commitInfos, String srcCodeDir, String dstCodeDir) {
         this.commitInfos = commitInfos;
+        this.srcCodeDir = srcCodeDir;
+        this.dstCodeDir = dstCodeDir;
         this.extraction();
     }
 
@@ -138,15 +141,15 @@ public class GraphUpdate extends KnowledgeExtractor {
     private void parseCommit(GitUpdate.CommitInfo commitInfo) {
         long commitId = commitInfo.id;
         for(String diff: commitInfo.diffSummary) {
-            if(!diff.contains(".c") || !diff.contains(".h")) continue;
+            if(!diff.contains(".c") && !diff.contains(".h")) continue;
 
             /* 以单个文件作为单位进行处理，首先进行初始化工作 */
             initDS();
 
             // 获取文件名
             String fileName = Utils.getFileFromDiff(diff);
-            String srcFile = this.getPrevCodeDir() + "//" + fileName;
-            String dstFile = this.getCodeDir() + "//" + fileName;
+            String srcFile = srcCodeDir + "//" + fileName;
+            String dstFile = dstCodeDir + "//" + fileName;
 
             // 将文件内容读入字符串
             srcContent = Utils.getFileContent(srcFile);

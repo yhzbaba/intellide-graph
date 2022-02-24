@@ -23,11 +23,11 @@ public abstract class KnowledgeExtractor {
 
     @Getter
     @Setter
-    private String prevCodeDir;
+    private String srcCodeDir;
 
     @Getter
     @Setter
-    private String codeDir;
+    private String dstCodeDir;
 
     @Getter
     @Setter
@@ -49,8 +49,8 @@ public abstract class KnowledgeExtractor {
                 e.printStackTrace();
             }
             extractor.setGraphDir(config.getGraphDir());
-            extractor.setPrevCodeDir(config.getPrevCodeDir());
-            extractor.setCodeDir(config.getCodeDir());
+            extractor.setSrcCodeDir(config.getSrcCodeDir());
+            extractor.setDstCodeDir(config.getDstCodeDir());
             extractor.setDataDir(config.getDataDir());
             try {
                 extractor.execute();
@@ -65,11 +65,11 @@ public abstract class KnowledgeExtractor {
         Yaml yaml = new Yaml();
         Map<String, Object> ret = yaml.load(yamlStr);
         String graphDir = (String) ret.get("graphDir");
+        String srcCodeDir = (String) ret.get("srcCodeDir");
+        String dstCodeDir = (String) ret.get("dstCodeDir");
         ret.remove("graphDir");
-        String prevCodeDir = (String) ret.get("prevCodeDir");
-        String codeDir = (String) ret.get("codeDir");
-        ret.remove("prevCodeDir");
-        ret.remove("codeDir");
+        ret.remove("srcCodeDir");
+        ret.remove("dstCodeDir");
         boolean increment = false;
         if (ret.containsKey("increment") && (boolean)ret.get("increment")){
             increment = true;
@@ -77,7 +77,7 @@ public abstract class KnowledgeExtractor {
         }
         List<ExtractorConfig> configs = new ArrayList<>();
         for (String key : ret.keySet()) {
-            configs.add(new ExtractorConfig(key, graphDir, prevCodeDir, codeDir, (String) ret.get(key)));
+            configs.add(new ExtractorConfig(key, graphDir, srcCodeDir, dstCodeDir, (String) ret.get(key)));
         }
         if (new File(graphDir).exists() && !increment){
             try {

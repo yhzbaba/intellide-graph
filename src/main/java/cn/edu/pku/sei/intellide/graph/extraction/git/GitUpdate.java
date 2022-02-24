@@ -115,7 +115,7 @@ public class GitUpdate extends KnowledgeExtractor {
         }
 
         // 根据 commitInfos 中的 commit 信息，利用 GumTree 得到 edit actions 从而更新图谱
-        new GraphUpdate(commitInfos);
+        new GraphUpdate(commitInfos, this.getSrcCodeDir(), this.getDstCodeDir());
 
         // 更新 timeStamp
         updateTimeStamp();
@@ -123,7 +123,6 @@ public class GitUpdate extends KnowledgeExtractor {
 
     /**
      * 解析单个新提交的 commit，并创建相关实体的联系
-     * FIXME: 在增量更新时需要查询原来的实体是否已存在，否则会创建重复实体
      */
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException, JSONException {
 

@@ -5,13 +5,13 @@ import lombok.Getter;
 public class ExtractorConfig {
 
     @Getter
-    private String className, graphDir, prevCodeDir, codeDir, dataDir;
+    private String className, graphDir, srcCodeDir, dstCodeDir, dataDir;
 
-    public ExtractorConfig(String className, String graphDir, String prevCodeDir, String codeDir, String dataDir) {
+    public ExtractorConfig(String className, String graphDir, String srcCodeDir, String dstCodeDir, String dataDir) {
         this.className = className;
         this.graphDir = graphDir;
-        this.prevCodeDir = prevCodeDir;
-        this.codeDir = codeDir;
+        this.srcCodeDir = srcCodeDir;
+        this.dstCodeDir = dstCodeDir;
         this.dataDir = dataDir;
     }
 

@@ -92,7 +92,7 @@ public class CCodeFileInfo {
                 functionInfo.setIsInline(declSpecifier.isInline());
                 functionInfo.setIsConst(declSpecifier.isConst());
                 functionInfo.setIsDefine(false);
-                FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(functionName)].add(functionInfo);
+//                FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(functionName)].add(functionInfo);
                 if(this.inserter != null) functionInfo.createNode(inserter);
                 functionInfoList.add(functionInfo);
             }
