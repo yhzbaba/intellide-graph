@@ -132,7 +132,7 @@ public class CCodeMentionExtractor extends KnowledgeExtractor {
                 Node fileNode = Nodes.next();
                 long nodeId = fileNode.getId();
                 String name = "";
-                if (label == CExtractor.c_code_file) name = (String) fileNode.getProperty(CExtractor.FILENAME);
+                if (label == CExtractor.c_code_file) name = (String) fileNode.getProperty(CExtractor.TAILFILENAME);
                 else name = (String) fileNode.getProperty(CExtractor.NAME);
 
                 if(nameFilter(name)) continue;

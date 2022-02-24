@@ -43,7 +43,8 @@ public class CProjectInfo {
                 }
                 numberOfFiles++;
                 IASTTranslationUnit translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(fileFullName));
-//                fileFullName = fileFullName.replace(dir, "").substring(1);
+                // 去除本机多余的路径信息
+                fileFullName = fileFullName.replace(dir, "").substring(1);
                 CCodeFileInfo codeFileInfo = new CCodeFileInfo(inserter, fileFullName, fileName, translationUnit);
                 codeFileInfoMap.put(fileName, codeFileInfo);
             }

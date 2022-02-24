@@ -145,15 +145,15 @@ public class GraphUpdate extends KnowledgeExtractor {
 
             // 获取文件名
             String fileName = Utils.getFileFromDiff(diff);
-            // TODO: 这里后期要改成项目代码的路径
-            String srcFile = "" + fileName;
-            String dstFile = "" + fileName;
+            String srcFile = this.getPrevCodeDir() + "//" + fileName;
+            String dstFile = this.getCodeDir() + "//" + fileName;
 
             // 将文件内容读入字符串
             srcContent = Utils.getFileContent(srcFile);
             dstContent = Utils.getFileContent(dstFile);
 
             // 解析被修改的代码文件(dstFile)
+            System.out.println("Parse Code File: " + fileName + "...\n");
             IASTTranslationUnit translationUnit = null;
             try {
                 translationUnit = GetTranslationUnitUtil.getASTTranslationUnit(new File(dstFile));
@@ -192,8 +192,10 @@ public class GraphUpdate extends KnowledgeExtractor {
              * 完成单个文件的修改信息的记录，统一执行数据库事务进行图谱更新
              */
 
+            System.out.println("Update Knowledge Graph...\n");
             updateKG(codeFileInfo, fileName, commitId);
 
+            System.out.println("Create Entity Relationships...\n");
             createRelationships(commitId, fileName);
 
         }

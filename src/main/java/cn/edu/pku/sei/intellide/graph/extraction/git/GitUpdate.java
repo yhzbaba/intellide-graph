@@ -61,7 +61,7 @@ public class GitUpdate extends KnowledgeExtractor {
 
         // 当前图谱的最新的 commit_time
         int timeStamp = getCommitTime();
-        System.out.println(timeStamp);
+        System.out.println("TimeStamp: " + timeStamp);
         try {
             repository = repositoryBuilder.build();
         } catch (IOException e) {
@@ -80,7 +80,7 @@ public class GitUpdate extends KnowledgeExtractor {
             for (RevCommit commit : commits) {
                 try {
                     // 已处理过的commit数据，跳过
-                    if(commit.getCommitTime() < timeStamp) continue;
+                    if(commit.getCommitTime() <= timeStamp) continue;
 
                     parseCommit(commit, repository, git);
 
@@ -98,7 +98,13 @@ public class GitUpdate extends KnowledgeExtractor {
             parentsMap.entrySet().forEach(entry -> {
                 Node commitNode = commitMap.get(entry.getKey());
                 entry.getValue().forEach(parentName -> {
-                    if (commitMap.containsKey(parentName)) {
+                    // 先判断 parent commit 是否在图谱中
+                    Node parentCommit = db.findNode(GitExtractor.COMMIT, "name", parentName);
+                    if(parentCommit != null) {
+                        commitNode.createRelationshipTo(parentCommit, PARENT);
+                    }
+                    // parent commit 是此次创建的实体节点
+                    else if(commitMap.containsKey(parentName)) {
                         commitNode.createRelationshipTo(commitMap.get(parentName), PARENT);
                     }
                 });
@@ -116,9 +122,8 @@ public class GitUpdate extends KnowledgeExtractor {
     }
 
     /**
-     * 解析单个commit，并创建相关实体的联系
-     * @throws IOException
-     * @throws GitAPIException
+     * 解析单个新提交的 commit，并创建相关实体的联系
+     * FIXME: 在增量更新时需要查询原来的实体是否已存在，否则会创建重复实体
      */
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException, JSONException {
 
@@ -154,7 +159,6 @@ public class GitUpdate extends KnowledgeExtractor {
             timeStampMap = map;
         }
 
-        // neo4j transaction
         GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
             // 创建 commit 节点并设置属性
@@ -169,35 +173,51 @@ public class GitUpdate extends KnowledgeExtractor {
             parentsMap.put(commit.getName(), parentNames);
             PersonIdent author = commit.getAuthorIdent();
             String personStr = author.getName() + ": " + author.getEmailAddress();
-            if (!personMap.containsKey(personStr)) {
-                Map<String, Object> pMap = new HashMap<>();
-                String name = author.getName();
-                String email = author.getEmailAddress();
-                pMap.put(NAME, name != null ? name : "");
-                pMap.put(EMAIL_ADDRESS, email != null ? email : "");
-                Node personNode = db.createNode(GIT_USER);
-                personNode.setProperty(NAME, pMap.get(NAME));
-                personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
-                personMap.put(personStr, personNode);
-                commitNode.createRelationshipTo(personNode, CREATOR);
-            } else {
+            if(personMap.containsKey(personStr)) {
                 commitNode.createRelationshipTo(personMap.get(personStr), CREATOR);
+            }
+            else {
+                String authorName = author.getName();
+                Node node = db.findNode(GitExtractor.GIT_USER, "name", authorName);
+                if(node != null) {
+                    commitNode.createRelationshipTo(node, CREATOR);
+                }
+                else {
+                    Map<String, Object> pMap = new HashMap<>();
+                    String name = author.getName();
+                    String email = author.getEmailAddress();
+                    pMap.put(NAME, name != null ? name : "");
+                    pMap.put(EMAIL_ADDRESS, email != null ? email : "");
+                    Node personNode = db.createNode(GIT_USER);
+                    personNode.setProperty(NAME, pMap.get(NAME));
+                    personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
+                    personMap.put(personStr, personNode);
+                    commitNode.createRelationshipTo(personNode, CREATOR);
+                }
             }
             PersonIdent committer = commit.getCommitterIdent();
             personStr = committer.getName() + ": " + committer.getEmailAddress();
-            if (!personMap.containsKey(personStr)) {
-                Map<String, Object> pMap = new HashMap<>();
-                String name = committer.getName();
-                String email = committer.getEmailAddress();
-                pMap.put(NAME, name != null ? name : "");
-                pMap.put(EMAIL_ADDRESS, email != null ? email : "");
-                Node personNode = db.createNode(GIT_USER);
-                personNode.setProperty(NAME, pMap.get(NAME));
-                personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
-                personMap.put(personStr, personNode);
-                commitNode.createRelationshipTo(personNode, COMMITTER);
-            } else {
+            if(personMap.containsKey(personStr)) {
                 commitNode.createRelationshipTo(personMap.get(personStr), COMMITTER);
+            }
+            else {
+                String authorName = author.getName();
+                Node node = db.findNode(GitExtractor.GIT_USER, "name", authorName);
+                if(node != null) {
+                    commitNode.createRelationshipTo(node, COMMITTER);
+                }
+                else {
+                    Map<String, Object> pMap = new HashMap<>();
+                    String name = author.getName();
+                    String email = author.getEmailAddress();
+                    pMap.put(NAME, name != null ? name : "");
+                    pMap.put(EMAIL_ADDRESS, email != null ? email : "");
+                    Node personNode = db.createNode(GIT_USER);
+                    personNode.setProperty(NAME, pMap.get(NAME));
+                    personNode.setProperty(EMAIL_ADDRESS, pMap.get(EMAIL_ADDRESS));
+                    personMap.put(personStr, personNode);
+                    commitNode.createRelationshipTo(personNode, COMMITTER);
+                }
             }
             tx.success();
         } catch (Exception ex) {
