@@ -115,7 +115,7 @@ public class GitUpdate extends KnowledgeExtractor {
         }
 
         // 根据 commitInfos 中的 commit 信息，利用 GumTree 得到 edit actions 从而更新图谱
-        new GraphUpdate(commitInfos, this.getSrcCodeDir(), this.getDstCodeDir());
+        new GraphUpdate(commitInfos, this.getSrcCodeDir(), this.getDstCodeDir(), this.getDb());
 
         // 更新 timeStamp
         updateTimeStamp();

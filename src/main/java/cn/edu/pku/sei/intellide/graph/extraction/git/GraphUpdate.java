@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  * - 执行 cypher 查找文件实体时的标识属性，文件的 fileName 应当设置为 项目内路径+tailFileName
  * - struct 的 field member 没有抽取出来
  */
-public class GraphUpdate extends KnowledgeExtractor {
+public class GraphUpdate {
 
     public static void main(String[] args) {
         Map<String, Set<String>> deleteInvokeFunctions = new HashMap<>();
@@ -65,6 +65,8 @@ public class GraphUpdate extends KnowledgeExtractor {
     private String srcContent;
     private String dstContent;
 
+    private GraphDatabaseService db;
+
     /*
      * 记录修改涉及到的代码信息，主要是元素名称，与 CCodeFileInfo 中的信息进行匹配
      * struct 和 function 的修改包括两类：内部成员的增删(map)、标识符等属性的修改(set)
@@ -94,14 +96,14 @@ public class GraphUpdate extends KnowledgeExtractor {
     Set<Long> updateEntities = new HashSet<>();
     Set<Long> addEntities = new HashSet<>();
 
-    public GraphUpdate(Map<String, GitUpdate.CommitInfo> commitInfos, String srcCodeDir, String dstCodeDir) {
+    public GraphUpdate(Map<String, GitUpdate.CommitInfo> commitInfos, String srcCodeDir, String dstCodeDir, GraphDatabaseService db) {
         this.commitInfos = commitInfos;
         this.srcCodeDir = srcCodeDir;
         this.dstCodeDir = dstCodeDir;
+        this.db = db;
         this.extraction();
     }
 
-    @Override
     public void extraction() {
         for(GitUpdate.CommitInfo commitInfo: commitInfos.values()) {
             // 先沿 parent 递归处理
@@ -510,7 +512,6 @@ public class GraphUpdate extends KnowledgeExtractor {
      * 更新图谱内容
      */
     private void updateKG(CCodeFileInfo codeFileInfo, String fileName, long commitId) {
-        GraphDatabaseService db = this.getDb();
         try(Transaction tx = db.beginTx()) {
             // commit -update-> code_file
             Node commitNode = db.getNodeById(commitId);
@@ -836,7 +837,6 @@ public class GraphUpdate extends KnowledgeExtractor {
      * 建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
      */
     private void createRelationships(long commitId, String fileName) {
-        GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
             Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
             Node commitNode = db.getNodeById(commitId);
