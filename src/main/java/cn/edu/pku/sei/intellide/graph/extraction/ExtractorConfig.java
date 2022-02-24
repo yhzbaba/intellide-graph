@@ -14,5 +14,4 @@ public class ExtractorConfig {
         this.dstCodeDir = dstCodeDir;
         this.dataDir = dataDir;
     }
-
 }

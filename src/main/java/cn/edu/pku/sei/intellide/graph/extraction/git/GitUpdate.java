@@ -265,7 +265,7 @@ public class GitUpdate extends KnowledgeExtractor {
         GraphDatabaseService db = this.getDb();
         try (Transaction tx = db.beginTx()) {
             ResourceIterator<Node> nodes = db.findNodes(TIMESTAMP);
-            if(nodes.hasNext()) {
+            if(nodes.hasNext() && !timeStampMap.isEmpty()) {
                 Node node = nodes.next();
                 node.delete();
                 Node tsNode = db.createNode(TIMESTAMP);
