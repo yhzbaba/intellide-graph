@@ -60,7 +60,7 @@ public class GitUpdate extends KnowledgeExtractor {
         repositoryBuilder.setGitDir(new File(this.getDataDir()));
 
         // 当前图谱的最新的 commit_time
-        int timeStamp = getCommitTime();
+        int timeStamp = Utils.getCommitTime(this.getDb());
         System.out.println("TimeStamp: " + timeStamp);
         try {
             repository = repositoryBuilder.build();
@@ -125,9 +125,6 @@ public class GitUpdate extends KnowledgeExtractor {
      * 解析单个新提交的 commit，并创建相关实体的联系
      */
     private void parseCommit(RevCommit commit, Repository repository, Git git) throws IOException, GitAPIException, JSONException {
-
-//        System.out.println(commit.getShortMessage());
-
         Map<String, Object> map = new HashMap<>();
         map.put(NAME, commit.getName());
         String message = commit.getFullMessage();
@@ -224,25 +221,6 @@ public class GitUpdate extends KnowledgeExtractor {
         }
         // 记录 commit 修改文件以及父结点，在图谱更新中进一步处理
         addCommitInfo(map, parentNames);
-    }
-
-    /**
-     * 访问数据库，获取当前图谱最新的commit_time
-     */
-    private int getCommitTime() {
-        GraphDatabaseService db = this.getDb();
-        try (Transaction tx = db.beginTx()) {
-            ResourceIterator<Node> nodes = db.findNodes(TIMESTAMP);
-            if(nodes.hasNext()) {
-                Node node = nodes.next();
-                int commitTime = (int) node.getProperty(COMMIT_TIME);
-                return commitTime;
-            }
-            tx.success();
-        } catch (Exception ex) {
-            ex.printStackTrace();
-        }
-        return -1;
     }
 
     /**

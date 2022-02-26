@@ -1,11 +1,37 @@
 package cn.edu.pku.sei.intellide.graph.extraction.git;
 
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CProjectInfo;
+import org.eclipse.core.runtime.CoreException;
+import org.neo4j.graphdb.GraphDatabaseService;
+import org.neo4j.graphdb.Node;
+import org.neo4j.graphdb.ResourceIterator;
+import org.neo4j.graphdb.Transaction;
+
 import java.io.*;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
+
+    /**
+     * 访问数据库，获取当前图谱最新的commit_time
+     */
+    public static int getCommitTime(GraphDatabaseService db) {
+        try (Transaction tx = db.beginTx()) {
+            ResourceIterator<Node> nodes = db.findNodes(GitUpdate.TIMESTAMP);
+            if(nodes.hasNext()) {
+                Node node = nodes.next();
+                return (int) node.getProperty(GitUpdate.COMMIT_TIME);
+            }
+            tx.success();
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return -1;
+    }
 
     /**
      * 获取修改的代码文件名称

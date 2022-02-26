@@ -36,12 +36,16 @@ import java.util.regex.Pattern;
 public class GraphUpdate {
 
     public static void main(String[] args) {
-        Map<String, Set<String>> deleteInvokeFunctions = new HashMap<>();
-        deleteInvokeFunctions.put("func", new HashSet<>());
-        deleteInvokeFunctions.get("func").add("f");
-        for(Map.Entry entry: deleteInvokeFunctions.entrySet()) {
+        Map<String, LinkedHashSet<String>> fileCommitInfos = new LinkedHashMap<>();
+        fileCommitInfos.put("b", new LinkedHashSet<>());
+        fileCommitInfos.get("b").add("f");
+        fileCommitInfos.get("b").add("a");
+        fileCommitInfos.put("a", new LinkedHashSet<>());
+        fileCommitInfos.get("a").add("c");
+        fileCommitInfos.get("a").add("b");
+        for(Map.Entry entry: fileCommitInfos.entrySet()) {
             String funcName = (String) entry.getKey();
-            Set<String> invokeFunctions = (Set<String>) entry.getValue();
+            Set<String> invokeFunctions = (LinkedHashSet<String>) entry.getValue();
             for(String s: invokeFunctions) {
                 System.out.println(s);
             }
@@ -59,6 +63,12 @@ public class GraphUpdate {
     }
 
     private Map<String, GitUpdate.CommitInfo> commitInfos;
+
+    /* 记录 <file, set<commit> >，按照添加顺序依次更新文件
+     * 主要的问题在于：单个 commit 对应的两个版本的代码文件缺失（只有初始和最终版本），导致 commit-code 不能对应
+     * TODO: commit-code relationship is not correct(code version)
+     */
+    private Map<String, LinkedHashSet<Long>> fileCommitInfos = new LinkedHashMap<>();
 
     private String srcCodeDir;
     private String dstCodeDir;
@@ -122,34 +132,13 @@ public class GraphUpdate {
                 commitInfo.isHandled = true;
             }
         }
-    }
-
-
-    private void initDS() {
-        addIncludes.clear(); deleteIncludes.clear();
-        addVariables.clear(); deleteVariables.clear(); updateVariables.clear();
-        addStructs.clear(); deleteStructs.clear(); updateStructs.clear();
-        addStructMembers.clear(); deleteStructMembers.clear();
-        addFunctions.clear(); deleteFunctions.clear(); updateFunctions.clear();
-        addInvokeFunctions.clear(); deleteInvokeFunctions.clear(); renameFunctions.clear();
-
-        updateEntities.clear(); addEntities.clear();
-    }
-
-    /**
-     * 处理 diffSummary 包含的文件
-     * @param commitInfo 单个commit涉及的所有修改文件
-     */
-    private void parseCommit(GitUpdate.CommitInfo commitInfo) {
-        long commitId = commitInfo.id;
-        for(String diff: commitInfo.diffSummary) {
-            if(!diff.contains(".c") && !diff.contains(".h")) continue;
+        for(Map.Entry entry: fileCommitInfos.entrySet()) {
+            String fileName = (String) entry.getKey();
+            Set<Long> commitIds = (LinkedHashSet<Long>) entry.getValue();
 
             /* 以单个文件作为单位进行处理，首先进行初始化工作 */
             initDS();
 
-            // 获取文件名
-            String fileName = Utils.getFileFromDiff(diff);
             String srcFile = srcCodeDir + "//" + fileName;
             String dstFile = dstCodeDir + "//" + fileName;
 
@@ -198,11 +187,42 @@ public class GraphUpdate {
              */
 
             System.out.println("Update Knowledge Graph...\n");
-            updateKG(codeFileInfo, fileName, commitId);
+            updateKG(codeFileInfo, fileName);
 
             System.out.println("Create Entity Relationships...\n");
-            createRelationships(commitId, fileName);
+            createRelationships(commitIds, fileName);
+        }
+    }
 
+
+    private void initDS() {
+        addIncludes.clear(); deleteIncludes.clear();
+        addVariables.clear(); deleteVariables.clear(); updateVariables.clear();
+        addStructs.clear(); deleteStructs.clear(); updateStructs.clear();
+        addStructMembers.clear(); deleteStructMembers.clear();
+        addFunctions.clear(); deleteFunctions.clear(); updateFunctions.clear();
+        addInvokeFunctions.clear(); deleteInvokeFunctions.clear(); renameFunctions.clear();
+
+        updateEntities.clear(); addEntities.clear();
+    }
+
+    /**
+     * 处理 diffSummary 包含的文件
+     * @param commitInfo 单个commit涉及的所有修改文件
+     */
+    private void parseCommit(GitUpdate.CommitInfo commitInfo) {
+//        long commitId = commitInfo.id;
+        for(String diff: commitInfo.diffSummary) {
+            if(!diff.contains(".c") && !diff.contains(".h")) continue;
+
+            String fileName = Utils.getFileFromDiff(diff);
+
+            // 单点处理直接在此处进行操作
+
+            if(!fileCommitInfos.containsKey(fileName)) {
+                fileCommitInfos.put(fileName, new LinkedHashSet<>());
+            }
+            fileCommitInfos.get(fileName).add(commitInfo.id);
         }
     }
 
@@ -511,12 +531,12 @@ public class GraphUpdate {
     /**
      * 更新图谱内容
      */
-    private void updateKG(CCodeFileInfo codeFileInfo, String fileName, long commitId) {
+    private void updateKG(CCodeFileInfo codeFileInfo, String fileName) {
         try(Transaction tx = db.beginTx()) {
             // commit -update-> code_file
-            Node commitNode = db.getNodeById(commitId);
-            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
-            commitNode.createRelationshipTo(fileNode, CCodeMentionExtractor.UPDATE);
+//            Node commitNode = db.getNodeById(commitId);
+//            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
+//            commitNode.createRelationshipTo(fileNode, CCodeMentionExtractor.UPDATE);
             // include files
             addIncludes.forEach(file -> {
                 String cql = "match (n:c_code_file{fileName:'" + fileName + "'}) " +
@@ -834,20 +854,25 @@ public class GraphUpdate {
     }
 
     /**
-     * 建立 commit 与 code 之间的关系（ADD, DELETE, UPDATE）
+     * 建立 commit 与 code 之间的关系（ADD, UPDATE）
      */
-    private void createRelationships(long commitId, String fileName) {
+    private void createRelationships(Set<Long> commitIds, String fileName) {
         try (Transaction tx = db.beginTx()) {
             Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
-            Node commitNode = db.getNodeById(commitId);
             addEntities.forEach(id -> {
                 Node node = db.getNodeById(id);
                 fileNode.createRelationshipTo(node, CExtractor.define);
-                commitNode.createRelationshipTo(node, CCodeMentionExtractor.ADD);
+                for(Long commitId: commitIds) {
+                    Node commitNode = db.getNodeById(commitId);
+                    commitNode.createRelationshipTo(node, CCodeMentionExtractor.ADD);
+                }
             });
             updateEntities.forEach(id -> {
                 Node node = db.getNodeById(id);
-                commitNode.createRelationshipTo(node, CCodeMentionExtractor.UPDATE);
+                for(Long commitId: commitIds) {
+                    Node commitNode = db.getNodeById(commitId);
+                    commitNode.createRelationshipTo(node, CCodeMentionExtractor.UPDATE);
+                }
             });
             tx.success();
         } catch (Exception ex) {

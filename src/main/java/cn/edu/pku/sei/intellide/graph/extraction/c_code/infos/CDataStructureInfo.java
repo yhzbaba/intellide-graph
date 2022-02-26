@@ -124,6 +124,6 @@ public class CDataStructureInfo {
                 return false;
             }
         }
-        return (this.name.equals(ds.getName()) && this.typedefName.equals(ds.getTypedefName()));
+        return (this.name.equals(ds.getName()) && this.typedefName.equals(ds.getTypedefName()) && this.isEnum.equals(ds.isEnum));
     }
 }

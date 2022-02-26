@@ -57,7 +57,7 @@ public class CFunctionInfo {
      */
     @Getter
     @Setter
-    private List<String> callFunctionNameList = new ArrayList<>();
+    private Set<String> callFunctionNameList = new HashSet<>();
 
     /**
      * 处理调用函数名列表
@@ -106,7 +106,7 @@ public class CFunctionInfo {
             /* 调用函数去重 */
 //            Set<String> set = new HashSet<>(filtered);
 //            setCallFunctionNameList(new ArrayList<>(set));
-            setCallFunctionNameList(filtered);
+            setCallFunctionNameList((Set<String>) filtered);
         }
     }
 

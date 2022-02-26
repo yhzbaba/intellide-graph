@@ -91,26 +91,29 @@ public class CExtractor extends KnowledgeExtractor {
         }
     }
 
-    public void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
+    /**
+     * @param inserter value==null: 更新验证使用
+     */
+    public static void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
         projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
             cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
-            cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
-                // 对函数调用的每一个函数查询其所属信息
-                Set<CFunctionInfo> invokeFunctions = new HashSet<>();
-                cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
-                    List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
-                    for(CFunctionInfo func: result) {
-                        if (func.getId() != -1) {
-                            invokeFunctions.add(func);
+            if(inserter != null) {
+                cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
+                    // 对函数调用的每一个函数查询其所属信息
+                    Set<CFunctionInfo> invokeFunctions = new HashSet<>();
+                    cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
+                        List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
+                        for(CFunctionInfo func: result) {
+                            if (func.getId() != -1) {
+                                invokeFunctions.add(func);
+                            }
                         }
-                    }
-                });
-                if(inserter != null) {
+                    });
                     invokeFunctions.forEach(invokeFunc -> {
                         inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
                     });
-                }
-            });
+                });
+            }
         });
     }
 
@@ -118,7 +121,7 @@ public class CExtractor extends KnowledgeExtractor {
      * 确定被调用的函数对象
      * 和 neo4j-c 版本有出入，没有使用哈希结构
      */
-    private List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
+    private static List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
         List<CFunctionInfo> res = new ArrayList<>();
         // 调用文件内的函数
         for(CFunctionInfo func: cCodeFileInfo.getFunctionInfoList()) {

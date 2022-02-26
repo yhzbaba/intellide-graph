@@ -50,4 +50,8 @@ public class CProjectInfo {
             }
         }
     }
+
+    public void addFileInfo(String fileName, CCodeFileInfo codeFileInfo) {
+        codeFileInfoMap.put(fileName, codeFileInfo);
+    }
 }

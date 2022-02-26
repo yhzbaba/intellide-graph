@@ -81,6 +81,7 @@ public class CVariableInfo {
     @Override
     public boolean equals(Object obj) {
         CVariableInfo var = (CVariableInfo) obj;
-        return (this.name.equals(var.getName()) && this.belongTo.equals(var.getBelongTo()));
+        return (this.name.equals(var.getName()) && this.belongTo.equals(var.getBelongTo())
+                && this.isDefine.equals(var.isDefine) && this.isStructVariable.equals(var.isStructVariable));
     }
 }
