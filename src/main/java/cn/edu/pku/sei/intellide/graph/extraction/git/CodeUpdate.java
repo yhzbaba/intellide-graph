@@ -242,7 +242,7 @@ public class CodeUpdate extends KnowledgeExtractor {
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return new CCodeFileInfo(fileName, filePath, translationUnit);
+        return new CCodeFileInfo(null, fileName, filePath, translationUnit);
     }
 
     /**
@@ -534,8 +534,8 @@ public class CodeUpdate extends KnowledgeExtractor {
                     node.setProperty("isDefine", func.getIsDefine());
                     node.setProperty("belongToName", func.getBelongToName());
                     // 需要考虑调用函数列表的修改
-                    List<String> invokeFunctions = func.getCallFunctionNameList();
-                    List<String> prevInvokeFunctions = new ArrayList<>();
+                    Set<String> invokeFunctions = func.getCallFunctionNameList();
+                    Set<String> prevInvokeFunctions = new HashSet<>();
                     for(CFunctionInfo prevFunc: codeFileInfo.getFunctionInfoList()) {
                         if(prevFunc.getName().equals(func.getName())) {
                             prevInvokeFunctions = prevFunc.getCallFunctionNameList();

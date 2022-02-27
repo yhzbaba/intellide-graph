@@ -154,7 +154,7 @@ public class GraphUpdate {
             } catch (CoreException | IOException e) {
                 e.printStackTrace();
             }
-            CCodeFileInfo codeFileInfo = new CCodeFileInfo(fileName, dstFile, translationUnit);
+            CCodeFileInfo codeFileInfo = new CCodeFileInfo(null, fileName, fileName.substring(fileName.lastIndexOf("//") + 1), translationUnit);
             codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
 
             /*
@@ -535,7 +535,7 @@ public class GraphUpdate {
         try(Transaction tx = db.beginTx()) {
             // commit -update-> code_file
 //            Node commitNode = db.getNodeById(commitId);
-//            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
+            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
 //            commitNode.createRelationshipTo(fileNode, CCodeMentionExtractor.UPDATE);
             // include files
             addIncludes.forEach(file -> {
@@ -561,6 +561,7 @@ public class GraphUpdate {
                        node.setProperty("belongTo", cVar.getBelongTo());
                        node.setProperty("isDefine", cVar.getIsDefine());
                        node.setProperty("isStructVariable", cVar.getIsStructVariable());
+                       fileNode.createRelationshipTo(node, CExtractor.define);
                        addEntities.add(node.getId());
                        break;
                    }
@@ -613,6 +614,7 @@ public class GraphUpdate {
                             node.createRelationshipTo(fNode, CExtractor.member_of);
                         }
                         addEntities.add(node.getId());
+                        fileNode.createRelationshipTo(node, CExtractor.define);
                         break;
                     }
                 }
@@ -736,6 +738,7 @@ public class GraphUpdate {
                             }
                         }
                         addEntities.add(node.getId());
+                        fileNode.createRelationshipTo(node, CExtractor.define);
                         break;
                     }
                 }
@@ -858,10 +861,9 @@ public class GraphUpdate {
      */
     private void createRelationships(Set<Long> commitIds, String fileName) {
         try (Transaction tx = db.beginTx()) {
-            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
+//            Node fileNode = db.findNode(CExtractor.c_code_file, "fileName", fileName);
             addEntities.forEach(id -> {
                 Node node = db.getNodeById(id);
-                fileNode.createRelationshipTo(node, CExtractor.define);
                 for(Long commitId: commitIds) {
                     Node commitNode = db.getNodeById(commitId);
                     commitNode.createRelationshipTo(node, CCodeMentionExtractor.ADD);

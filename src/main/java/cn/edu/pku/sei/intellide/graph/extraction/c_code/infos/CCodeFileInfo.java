@@ -41,15 +41,15 @@ public class CCodeFileInfo {
         this.fileName = fileName;
     }
 
-    public CCodeFileInfo(String tailFileName, String fileName, IASTTranslationUnit unit) {
-        this.fileName = fileName;
-        this.tailFileName = tailFileName;
-        this.unit = unit;
-        this.initFunctions();
-        this.initDataStructures();
-        this.initVariables();
-        this.initIncludeCodeFiles();
-    }
+//    public CCodeFileInfo(String tailFileName, String fileName, IASTTranslationUnit unit) {
+//        this.fileName = fileName;
+//        this.tailFileName = tailFileName;
+//        this.unit = unit;
+//        this.initFunctions();
+//        this.initDataStructures();
+//        this.initVariables();
+//        this.initIncludeCodeFiles();
+//    }
 
     public CCodeFileInfo(BatchInserter inserter, String fileName, String tailFileName, IASTTranslationUnit unit) {
         this.fileName = fileName;
@@ -60,7 +60,7 @@ public class CCodeFileInfo {
         this.initDataStructures();
         this.initVariables();
         this.initIncludeCodeFiles();
-        this.createNode();
+        if(inserter != null) this.createNode();
     }
 
     /**

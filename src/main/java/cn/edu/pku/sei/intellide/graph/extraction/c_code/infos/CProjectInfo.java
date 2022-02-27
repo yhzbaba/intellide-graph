@@ -46,7 +46,7 @@ public class CProjectInfo {
                 // 去除本机多余的路径信息
                 fileFullName = fileFullName.replace(dir, "").substring(1);
                 CCodeFileInfo codeFileInfo = new CCodeFileInfo(inserter, fileFullName, fileName, translationUnit);
-                codeFileInfoMap.put(fileName, codeFileInfo);
+                codeFileInfoMap.put(fileFullName, codeFileInfo);
             }
         }
     }

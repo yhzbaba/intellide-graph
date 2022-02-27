@@ -84,9 +84,7 @@ public class CExtractor extends KnowledgeExtractor {
             // 处理函数调用关系
             createInvokeRelations(projectInfo, inserter);
 
-        } catch (IOException e) {
-            e.printStackTrace();
-        } catch (CoreException e) {
+        } catch (IOException | CoreException e) {
             e.printStackTrace();
         }
     }

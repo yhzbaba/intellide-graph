@@ -102,11 +102,12 @@ public class CFunctionInfo {
                 }
             }
             List<String> filtered = finalResult.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
+            Set<String> result = new HashSet<String>(filtered);
 //            System.out.println(name + "函数的调用情况: " + filtered);
             /* 调用函数去重 */
 //            Set<String> set = new HashSet<>(filtered);
 //            setCallFunctionNameList(new ArrayList<>(set));
-            setCallFunctionNameList((Set<String>) filtered);
+            setCallFunctionNameList(result);
         }
     }
 
@@ -151,6 +152,6 @@ public class CFunctionInfo {
                 return false;
             }
         }
-        return (fullName.equals(func.getFullName()) && belongTo.equals(func.getBelongTo()));
+        return (name.equals(func.getName()) && belongTo.equals(func.getBelongTo()));
     }
 }
