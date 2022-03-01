@@ -84,11 +84,7 @@ public class GitUpdate extends KnowledgeExtractor {
 
                     parseCommit(commit, repository, git);
 
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (GitAPIException e) {
-                    e.printStackTrace();
-                } catch (JSONException e) {
+                } catch (IOException | GitAPIException | JSONException e) {
                     e.printStackTrace();
                 }
             }

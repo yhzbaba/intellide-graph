@@ -58,6 +58,7 @@ public class Utils {
     public static String getFileContent(String filePath) {
         String res = "";
         File file = new File(filePath);
+        if(!file.exists()) return "Null";
         FileReader reader = null;
         try {
             reader = new FileReader(file);
@@ -69,8 +70,6 @@ public class Utils {
             }
             bReader.close();
             res = sb.toString();
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
         } catch (IOException e) {
             e.printStackTrace();
         }
