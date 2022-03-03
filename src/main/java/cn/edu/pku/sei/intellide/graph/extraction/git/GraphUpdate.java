@@ -290,7 +290,7 @@ public class GraphUpdate {
     private void parseActionContent(EditAction editAction) {
         // 依据 edit action 节点的类型进行相应的处理
 
-        // Note:有很多不相关的修改，但因为恰好是-+的操作，识别为 update / move
+        // Note:有很多不相关的修改，但因为恰好是-+的操作（如函数更名，调用函数的修改），识别为 update / move
         if(editAction.type.contains("update")) {
             if(editAction.pNode.equals("Definition")) {
                 // 函数更名
@@ -302,15 +302,48 @@ public class GraphUpdate {
                     renameFunctions.put(oldFunc, newFunc);
                 }
             }
-            else if(editAction.tNode.contains("GenericString") && editAction.tNode.contains(".h")) {
+            else if(editAction.tNode.contains("GenericString")) {
                 // - include + include
-                String tmp = editAction.content.get(0);
-                Matcher m = Pattern.compile("replace\\s\"(\\w+)\"\\sby\\s\"(\\w+)\"").matcher(tmp);
-                if(m.find()) {
-                    String oldInclude = m.group(1);
-                    String newInclude = m.group(2);
-                    addIncludes.add(newInclude);
-                    deleteIncludes.add(oldInclude);
+                if(editAction.tNode.contains(".h")) {
+                    String tmp = editAction.content.get(0);
+                    Matcher m = Pattern.compile("replace\\s\"(\\w+)\"\\sby\\s\"(\\w+)\"").matcher(tmp);
+                    if(m.find()) {
+                        String oldInclude = m.group(1);
+                        String newInclude = m.group(2);
+                        addIncludes.add(newInclude);
+                        deleteIncludes.add(oldInclude);
+                    }
+                }
+                else {
+                    // 暂且考虑只有调用函数替换的情形
+                    String tmp = editAction.content.get(0);
+                    Matcher m = Pattern.compile("replace\\s\"(\\w+)\"\\sby\\s\"(\\w+)\"").matcher(tmp);
+                    if(m.find()) {
+                        String oldFunc= m.group(1);
+                        String newFunc = m.group(2);
+                        // 回溯父节点，找到外层的函数定义
+                        tmp = editAction.Node.getParent().toString();
+                        while(!tmp.equals("Definition") && editAction.Node != null) {
+                            editAction.Node = editAction.Node.getParent();
+                            tmp = editAction.Node.toString();
+                        }
+                        String calleeFunc = Utils.getItemName(Integer.parseInt(tmp.substring(tmp.indexOf("[")+1, tmp.indexOf(","))),
+                                Integer.parseInt(tmp.substring(tmp.indexOf(",")+1, tmp.indexOf("]"))), dstContent, "FuncDef");
+                        if(addInvokeFunctions.containsKey(calleeFunc)) {
+                            addInvokeFunctions.get(calleeFunc).add(newFunc);
+                        }
+                        else {
+                            addInvokeFunctions.put(calleeFunc, new HashSet<>());
+                            addInvokeFunctions.get(calleeFunc).add(newFunc);
+                        }
+                        if(deleteInvokeFunctions.containsKey(calleeFunc)) {
+                            deleteInvokeFunctions.get(calleeFunc).add(oldFunc);
+                        }
+                        else {
+                            deleteInvokeFunctions.put(calleeFunc, new HashSet<>());
+                            deleteInvokeFunctions.get(calleeFunc).add(oldFunc);
+                        }
+                    }
                 }
             }
         }
@@ -632,7 +665,6 @@ public class GraphUpdate {
             }
         }
     }
-
 
     /**
      * 更新图谱内容
