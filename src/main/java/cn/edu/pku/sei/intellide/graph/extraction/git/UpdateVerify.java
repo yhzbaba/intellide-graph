@@ -89,7 +89,7 @@ public class UpdateVerify extends KnowledgeExtractor  {
                             func.setIsConst((Boolean) dstNode.getProperty("isConst"));
                             func.setIsDefine((Boolean) dstNode.getProperty("isDefine"));
 //                            func.setFullParams((List<String>) dstNode.getProperty("fullParams"));
-                            Set<String> callFunctionNameList = new HashSet<>();
+                            List<String> callFunctionNameList = new ArrayList<>();
                             if(dstNode.hasRelationship(CExtractor.invoke)) {
                                 for(Relationship r: dstNode.getRelationships(CExtractor.invoke, OUTGOING)) {
                                     Node endNode = r.getEndNode();

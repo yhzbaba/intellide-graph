@@ -5,6 +5,7 @@ import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class FunctionUtil {
     public static int SIZE_OF_FUNCTION_HASH_SET = 1111113;
@@ -105,8 +106,7 @@ public class FunctionUtil {
         for (IASTStatement statement : statements) {
             if(statement instanceof IASTReturnStatement) {
                 // return语句 可能出现函数调用 return fun1(2); return fun1(2) < fun2 (4);
-                List<String> returnResult = getFunctionNameFromReturnStatement((IASTReturnStatement)statement);
-                result.addAll(returnResult);
+                result.addAll(getFunctionNameFromReturnStatement((IASTReturnStatement)statement));
             } else if (statement instanceof IASTDeclarationStatement) {
                 // int res = test1();
                 result.addAll(getFunctionNameFromDeclarationStatement((IASTDeclarationStatement)statement));
@@ -114,28 +114,30 @@ public class FunctionUtil {
                 // fun1(2)
                 result.addAll(getFunctionNameFromExpressionStatement((IASTExpressionStatement)statement));
             } else if (statement instanceof IASTForStatement) {
-                for (IASTNode node : statement.getChildren()) {
-                    if(node instanceof IASTBinaryExpression) {
-                        List<String> binaryResult = getFunctionNameFromBinaryExpression((IASTBinaryExpression)node);
-                        result.addAll(binaryResult);
-                    } else if (node instanceof IASTCompoundStatement) {
-                        List<String> compoundResult = getFunctionNameFromCompoundStatement((IASTCompoundStatement)node);
-                        result.addAll(compoundResult);
-                    }
-                }
+                FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), result);
             } else if (statement instanceof IASTWhileStatement) {
-                for (IASTNode node : statement.getChildren()) {
-                    if(node instanceof IASTBinaryExpression) {
-                        List<String> binaryResult = getFunctionNameFromBinaryExpression((IASTBinaryExpression)node);
-                        result.addAll(binaryResult);
-                    } else if (node instanceof IASTCompoundStatement) {
-                        List<String> compoundResult = getFunctionNameFromCompoundStatement((IASTCompoundStatement)node);
-                        result.addAll(compoundResult);
-                    }
-                }
+                FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), result);
+            }else if (statement instanceof IASTIfStatement) {
+                FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), result);
             }
         }
         return result;
+    }
+
+    public static List<String> getFunctionNameAndUpdate(IASTNode[] nodes, List<String> finalResult) {
+        for (IASTNode node : nodes) {
+            if (node instanceof IASTBinaryExpression) {
+                List<String> binaryResult = FunctionUtil.getFunctionNameFromBinaryExpression((IASTBinaryExpression) node);
+                finalResult.addAll(binaryResult);
+            } else if (node instanceof IASTCompoundStatement) {
+                List<String> compoundResult = FunctionUtil.getFunctionNameFromCompoundStatement((IASTCompoundStatement) node);
+                finalResult.addAll(compoundResult);
+            } else if (node instanceof IASTFunctionCallExpression) {
+                List<String> functionCallResult = FunctionUtil.getFunctionNameFromFunctionCallExpression((IASTFunctionCallExpression) node);
+                finalResult.addAll(functionCallResult);
+            }
+        }
+        return finalResult;
     }
 
     public static int hashFunc(String key){

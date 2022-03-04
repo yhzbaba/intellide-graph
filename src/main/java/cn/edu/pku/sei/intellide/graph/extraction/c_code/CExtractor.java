@@ -98,8 +98,9 @@ public class CExtractor extends KnowledgeExtractor {
             if(inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     // 对函数调用的每一个函数查询其所属信息
-                    Set<CFunctionInfo> invokeFunctions = new HashSet<>();
-                    cFunctionInfo.getCallFunctionNameList().forEach(callFunc -> {
+                    List<CFunctionInfo> invokeFunctions = new ArrayList<>();
+                    List<String> old = cFunctionInfo.getCallFunctionNameList();
+                    old.forEach(callFunc -> {
                         List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
                         for(CFunctionInfo func: result) {
                             if (func.getId() != -1) {
@@ -121,22 +122,33 @@ public class CExtractor extends KnowledgeExtractor {
      */
     private static List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
         List<CFunctionInfo> res = new ArrayList<>();
-        // 调用文件内的函数
-        for(CFunctionInfo func: cCodeFileInfo.getFunctionInfoList()) {
-            if(func.getName().equals(name) || func.getFullName().contains(name)) {
-                res.add(func);
-                break;
-            }
-        }
-        // 调用外部 include 文件的函数
-        List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
-        for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
-            if (!includeFiles.contains(codeFileInfo.getFileName())) {
-                continue;
-            }
-            for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
+        List<CFunctionInfo> tempList = FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(name)];
+        /**
+         * 这个地方我认为大多数情况下被调用函数名是只有一个的，所以如果哈希表查出来就一个那肯定就是了，
+         * 不然就没啥意义了
+         */
+        if(tempList.size() == 1) {
+            CFunctionInfo only = tempList.get(0);
+            // 只查到了一个那就直接扔进去 不然也没啥意义了
+            res.add(only);
+        } else {
+            // 调用文件内的函数
+            for (CFunctionInfo func : cCodeFileInfo.getFunctionInfoList()) {
                 if (func.getName().equals(name) || func.getFullName().contains(name)) {
                     res.add(func);
+                    break;
+                }
+            }
+            // 调用外部 include 文件的函数
+            List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
+            for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
+                if (!includeFiles.contains(codeFileInfo.getFileName())) {
+                    continue;
+                }
+                for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
+                    if (func.getName().equals(name) || func.getFullName().contains(name)) {
+                        res.add(func);
+                    }
                 }
             }
         }

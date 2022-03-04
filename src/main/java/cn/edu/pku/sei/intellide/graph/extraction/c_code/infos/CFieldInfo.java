@@ -20,7 +20,9 @@ public class CFieldInfo {
     private String type = "int";
 
     public long createNode(BatchInserter inserter) {
-        if(id != -1) return id;
+        if (id != -1) {
+            return id;
+        }
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.TYPE, type);

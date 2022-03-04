@@ -30,20 +30,23 @@ public class CDataStructureInfo {
 
     private BatchInserter inserter;
 
-    public CDataStructureInfo() {}
+    public CDataStructureInfo() {
+    }
 
     public CDataStructureInfo(BatchInserter inserter) {
         this.inserter = inserter;
     }
 
     public void initEnumFieldInfo() {
-        for (IASTNode node: simpleDeclaration.getChildren()) {
-            for (IASTNode node2: node.getChildren()) {
+        for (IASTNode node : simpleDeclaration.getChildren()) {
+            for (IASTNode node2 : node.getChildren()) {
                 if (node2 instanceof IASTEnumerationSpecifier.IASTEnumerator) {
                     CFieldInfo fieldInfo = new CFieldInfo();
                     fieldInfo.setName(((IASTEnumerationSpecifier.IASTEnumerator) node2).getName().toString());
                     fieldInfo.setType("int");
-                    if(this.inserter != null) fieldInfo.createNode(inserter);
+                    if (this.inserter != null) {
+                        fieldInfo.createNode(inserter);
+                    }
                     fieldInfoList.add(fieldInfo);
                 }
             }
@@ -52,20 +55,20 @@ public class CDataStructureInfo {
 
     public void initStructFieldInfo() {
         boolean isPointer;
-        for (IASTNode node: simpleDeclaration.getChildren()) {
-            for (IASTNode node2: node.getChildren()) {
+        for (IASTNode node : simpleDeclaration.getChildren()) {
+            for (IASTNode node2 : node.getChildren()) {
                 CFieldInfo fieldInfo = new CFieldInfo();
                 StringBuilder name = new StringBuilder();
                 StringBuilder type = new StringBuilder();
                 isPointer = false;
                 boolean isArray = false;
-                for(IASTNode node3: node2.getChildren()) {
+                for (IASTNode node3 : node2.getChildren()) {
                     if (node3 instanceof IASTDeclarator) {
                         // 名字部分 目前的策略是只有直接的函数指针保存
-                        if (ASTUtil.hasPointerType((IASTDeclarator)node3)){
+                        if (ASTUtil.hasPointerType((IASTDeclarator) node3)) {
                             // 指针
                             isPointer = true;
-                            for (IASTNode node4: node3.getChildren()) {
+                            for (IASTNode node4 : node3.getChildren()) {
                                 if (node4 instanceof IASTDeclarator) {
                                     name.append(((IASTDeclarator) node4).getName().toString());
                                 }
@@ -90,8 +93,10 @@ public class CDataStructureInfo {
                     type.append("[]");
                 }
                 fieldInfo.setType(type.toString());
-                if(isPointer) {
-                    if(this.inserter != null) fieldInfo.createNode(inserter);
+                if (isPointer) {
+                    if (this.inserter != null) {
+                        fieldInfo.createNode(inserter);
+                    }
                     fieldInfoList.add(fieldInfo);
                 }
             }
@@ -99,7 +104,9 @@ public class CDataStructureInfo {
     }
 
     public long createNode() {
-        if(id != -1) return id;
+        if (id != -1) {
+            return id;
+        }
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.TYPEDEFNAME, typedefName);
@@ -116,11 +123,11 @@ public class CDataStructureInfo {
     @Override
     public boolean equals(Object obj) {
         CDataStructureInfo ds = (CDataStructureInfo) obj;
-        if(fieldInfoList.size() != ds.getFieldInfoList().size()) {
+        if (fieldInfoList.size() != ds.getFieldInfoList().size()) {
             return false;
         }
-        for(CFieldInfo field: fieldInfoList) {
-            if(!ds.getFieldInfoList().contains(field)) {
+        for (CFieldInfo field : fieldInfoList) {
+            if (!ds.getFieldInfoList().contains(field)) {
                 return false;
             }
         }

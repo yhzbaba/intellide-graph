@@ -23,7 +23,7 @@ public class CVariableInfo {
     private String name;
 
     /**
-     * 内容
+     * 内容 #define _TEST这样的设为""
      */
     @Getter
     @Setter
@@ -62,7 +62,9 @@ public class CVariableInfo {
     private IASTSimpleDeclaration simpleDeclaration;
 
     public long createNode(BatchInserter inserter) {
-        if(id != -1) return id;
+        if (id != -1) {
+            return id;
+        }
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.CONTENT, content);
@@ -83,5 +85,19 @@ public class CVariableInfo {
         CVariableInfo var = (CVariableInfo) obj;
         return (this.name.equals(var.getName()) && this.belongTo.equals(var.getBelongTo())
                 && this.isDefine.equals(var.isDefine) && this.isStructVariable.equals(var.isStructVariable));
+    }
+
+    @Override
+    public String toString() {
+        return "CVariableInfo{" +
+                "id=" + id +
+                ", name='" + name + '\'' +
+                ", content='" + content + '\'' +
+                ", belongTo='" + belongTo + '\'' +
+                ", isDefine=" + isDefine +
+                ", isStructVariable=" + isStructVariable +
+                ", specifier=" + specifier +
+                ", simpleDeclaration=" + simpleDeclaration +
+                '}';
     }
 }

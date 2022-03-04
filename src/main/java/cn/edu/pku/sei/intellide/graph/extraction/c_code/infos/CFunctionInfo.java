@@ -57,57 +57,45 @@ public class CFunctionInfo {
      */
     @Getter
     @Setter
-    private Set<String> callFunctionNameList = new HashSet<>();
+    private List<String> callFunctionNameList = new ArrayList<>();
 
     /**
      * 处理调用函数名列表
      */
     public void initCallFunctionNameList() {
-        if(!isDefine) {
+        if (!isDefine) {
             // 这不是宏函数
-            IASTCompoundStatement compoundStatement = (IASTCompoundStatement)functionDefinition.getBody();
+            IASTCompoundStatement compoundStatement = (IASTCompoundStatement) functionDefinition.getBody();
             IASTStatement[] statements = compoundStatement.getStatements();
             List<String> finalResult = new ArrayList<>();
             for (IASTStatement statement : statements) {
-                if(statement instanceof IASTReturnStatement) {
+                if (statement instanceof IASTReturnStatement) {
                     // return语句 可能出现函数调用 return fun1(2); return fun1(2) < fun2 (4);
-                    List<String> returnResult = FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement)statement);
+                    List<String> returnResult = FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement) statement);
                     finalResult.addAll(returnResult);
                 } else if (statement instanceof IASTDeclarationStatement) {
                     // int res = test1();
-                    finalResult.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement)statement));
+                    finalResult.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
                 } else if (statement instanceof IASTExpressionStatement) {
                     // fun1(2)
-                    finalResult.addAll(FunctionUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement)statement));
+                    finalResult.addAll(FunctionUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
                 } else if (statement instanceof IASTForStatement) {
-                    for (IASTNode node : statement.getChildren()) {
-                        if(node instanceof IASTBinaryExpression) {
-                            List<String> binaryResult = FunctionUtil.getFunctionNameFromBinaryExpression((IASTBinaryExpression)node);
-                            finalResult.addAll(binaryResult);
-                        } else if (node instanceof IASTCompoundStatement) {
-                            List<String> compoundResult = FunctionUtil.getFunctionNameFromCompoundStatement((IASTCompoundStatement)node);
-                            finalResult.addAll(compoundResult);
-                        }
-                    }
+                    FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), finalResult);
                 } else if (statement instanceof IASTWhileStatement) {
-                    for (IASTNode node : statement.getChildren()) {
-                        if(node instanceof IASTBinaryExpression) {
-                            List<String> binaryResult = FunctionUtil.getFunctionNameFromBinaryExpression((IASTBinaryExpression)node);
-                            finalResult.addAll(binaryResult);
-                        } else if (node instanceof IASTCompoundStatement) {
-                            List<String> compoundResult = FunctionUtil.getFunctionNameFromCompoundStatement((IASTCompoundStatement)node);
-                            finalResult.addAll(compoundResult);
-                        }
-                    }
+                    FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), finalResult);
+                } else if (statement instanceof IASTIfStatement) {
+                    FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), finalResult);
+                } else if (statement instanceof IASTSwitchStatement) {
+                    FunctionUtil.getFunctionNameAndUpdate(statement.getChildren(), finalResult);
                 }
             }
             List<String> filtered = finalResult.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
-            Set<String> result = new HashSet<String>(filtered);
+//            Set<String> result = new HashSet<String>(filtered);
 //            System.out.println(name + "函数的调用情况: " + filtered);
             /* 调用函数去重 */
 //            Set<String> set = new HashSet<>(filtered);
 //            setCallFunctionNameList(new ArrayList<>(set));
-            setCallFunctionNameList(result);
+            setCallFunctionNameList(filtered);
         }
     }
 
@@ -123,7 +111,9 @@ public class CFunctionInfo {
     }
 
     public long createNode(BatchInserter inserter) {
-        if(id != -1) return id;
+        if (id != -1) {
+            return id;
+        }
         Map<String, Object> map = new HashMap<>();
         map.put(CExtractor.NAME, name);
         map.put(CExtractor.FULLNAME, fullName);
@@ -144,11 +134,11 @@ public class CFunctionInfo {
     @Override
     public boolean equals(Object obj) {
         CFunctionInfo func = (CFunctionInfo) obj;
-        if(callFunctionNameList.size() != func.getCallFunctionNameList().size()) {
+        if (callFunctionNameList.size() != func.getCallFunctionNameList().size()) {
             return false;
         }
-        for(String f: callFunctionNameList) {
-            if(!func.getCallFunctionNameList().contains(f)) {
+        for (String f : callFunctionNameList) {
+            if (!func.getCallFunctionNameList().contains(f)) {
                 return false;
             }
         }
