@@ -1,0 +1,6 @@
+graphDir: /Users/yhzbaba/Documents/Software/neo4j/neo4j-community-3.5.30/data/databases/graph.db
+
+cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/Code/C++/csp
+
+# 命令
+# java -jar target/intellide-graph-1.2.1.jar -gen config.yml

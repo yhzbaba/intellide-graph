@@ -131,7 +131,9 @@ public class CExtractor extends KnowledgeExtractor {
         // 调用外部 include 文件的函数
         List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
         for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
-            if (!includeFiles.contains(codeFileInfo.getFileName())) continue;
+            if (!includeFiles.contains(codeFileInfo.getFileName())) {
+                continue;
+            }
             for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
                 if (func.getName().equals(name) || func.getFullName().contains(name)) {
                     res.add(func);
