@@ -63,7 +63,7 @@ public class CExtractor extends KnowledgeExtractor {
             projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
                 // 处理单个文件
                 cCodeFileInfo.getIncludeCodeFileList().forEach(key -> {
-                    if(projectInfo.getCodeFileInfoMap().containsKey(key)) {
+                    if (projectInfo.getCodeFileInfoMap().containsKey(key)) {
                         inserter.createRelationship(cCodeFileInfo.getId(), projectInfo.getCodeFileInfoMap().get(key).getId(), CExtractor.include, new HashMap<>());
                     }
                 });
@@ -95,14 +95,14 @@ public class CExtractor extends KnowledgeExtractor {
     public static void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
         projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
             cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
-            if(inserter != null) {
+            if (inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     // 对函数调用的每一个函数查询其所属信息
                     List<CFunctionInfo> invokeFunctions = new ArrayList<>();
                     List<String> old = cFunctionInfo.getCallFunctionNameList();
                     old.forEach(callFunc -> {
-                        List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, callFunc);
-                        for(CFunctionInfo func: result) {
+                        List<CFunctionInfo> result = getInvokeFunctions(projectInfo, cCodeFileInfo, cFunctionInfo, callFunc);
+                        for (CFunctionInfo func : result) {
                             if (func.getId() != -1) {
                                 invokeFunctions.add(func);
                             }
@@ -119,39 +119,38 @@ public class CExtractor extends KnowledgeExtractor {
     /**
      * 确定被调用的函数对象
      * 和 neo4j-c 版本有出入，没有使用哈希结构
+     * param3 调用方的函数节点，而不是被调用方
      */
-    private static List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo, String name) {
+    private static List<CFunctionInfo> getInvokeFunctions(CProjectInfo projectInfo, CCodeFileInfo cCodeFileInfo,
+                                                          CFunctionInfo cFunctionInfo, String name) {
         List<CFunctionInfo> res = new ArrayList<>();
         List<CFunctionInfo> tempList = FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(name)];
-        /**
-         * 这个地方我认为大多数情况下被调用函数名是只有一个的，所以如果哈希表查出来就一个那肯定就是了，
-         * 不然就没啥意义了
-         */
-        if(tempList.size() == 1) {
-            CFunctionInfo only = tempList.get(0);
-            // 只查到了一个那就直接扔进去 不然也没啥意义了
-            res.add(only);
-        } else {
-            // 调用文件内的函数
-            for (CFunctionInfo func : cCodeFileInfo.getFunctionInfoList()) {
-                if (func.getName().equals(name) || func.getFullName().contains(name)) {
-                    res.add(func);
-                    break;
-                }
-            }
-            // 调用外部 include 文件的函数
-            List<String> includeFiles = cCodeFileInfo.getIncludeCodeFileList();
-            for (CCodeFileInfo codeFileInfo : projectInfo.getCodeFileInfoMap().values()) {
-                if (!includeFiles.contains(codeFileInfo.getFileName())) {
-                    continue;
-                }
-                for (CFunctionInfo func : codeFileInfo.getFunctionInfoList()) {
-                    if (func.getName().equals(name) || func.getFullName().contains(name)) {
-                        res.add(func);
+        if (tempList.size() > 1) {
+            List<String> includeCodeFileList = cCodeFileInfo.getIncludeCodeFileList();
+            /**
+             *
+             .h中声明，.c中实现，我include的是.h，又希望指向实现，这种情况加个兜底，如果计数为0，那么就加进去
+             因为最后编译不可能存在两个实现
+             */
+            for (CFunctionInfo info : tempList) {
+                if (cFunctionInfo.getBelongTo().equals(info.getBelongTo())) {
+                    // (2)
+                    res.add(info);
+                } else {
+                    for (String includeFileName : includeCodeFileList) {
+                        if (includeFileName.contains(info.getBelongTo())) {
+                            // (1)
+                            res.add(info);
+                        }
                     }
                 }
             }
+        } else if (tempList.size() == 1) {
+            CFunctionInfo only = tempList.get(0);
+            // 只查到了一个那就直接扔进去 不然也没啥意义了
+            res.add(only);
         }
+
         return res;
     }
 }
