@@ -160,22 +160,41 @@ public class CCodeFileInfo {
                 IASTSimpleDeclaration simpleDeclaration = (IASTSimpleDeclaration) declaration;
                 IASTDeclSpecifier declSpecifier = simpleDeclaration.getDeclSpecifier();
                 if (declSpecifier instanceof IASTSimpleDeclSpecifier) {
-                    IASTSimpleDeclSpecifier simpleDeclSpecifier = (IASTSimpleDeclSpecifier) declSpecifier;
-                    CVariableInfo variableInfo = new CVariableInfo();
-                    variableInfo.setSpecifier(simpleDeclSpecifier);
-                    variableInfo.setSimpleDeclaration(simpleDeclaration);
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
-                        variableInfo.setName(declarator.getName().toString());
+                        if (declarator instanceof IASTFunctionDeclarator) {
+                            CFunctionInfo functionInfo = new CFunctionInfo();
+                            functionInfo.setFunctionDefinition(null);
+                            functionInfo.setBelongTo(fileName);
+                            functionInfo.setName(declarator.getName().toString());
+                            functionInfo.setFullName(simpleDeclaration.getRawSignature());
+                            functionInfo.setBelongToName(fileName + declarator.getName().toString());
+                            functionInfo.setIsInline(false);
+                            functionInfo.setIsDefine(false);
+                            if (declSpecifier.getRawSignature().contains("const")) {
+                                functionInfo.setIsConst(true);
+                            } else {
+                                functionInfo.setIsConst(false);
+                            }
+                            if (this.inserter != null) {
+                                functionInfo.createNode(inserter);
+                            }
+                        } else {
+                            IASTSimpleDeclSpecifier simpleDeclSpecifier = (IASTSimpleDeclSpecifier) declSpecifier;
+                            CVariableInfo variableInfo = new CVariableInfo();
+                            variableInfo.setSpecifier(simpleDeclSpecifier);
+                            variableInfo.setSimpleDeclaration(simpleDeclaration);
+                            variableInfo.setName(declarator.getName().toString());
+                            variableInfo.setBelongTo(fileName);
+                            // typedef long long ll;
+                            variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
+                            variableInfo.setContent(declaration.getRawSignature());
+                            variableInfo.setIsStructVariable(false);
+                            if (this.inserter != null) {
+                                variableInfo.createNode(inserter);
+                            }
+                            variableInfoList.add(variableInfo);
+                        }
                     }
-                    variableInfo.setBelongTo(fileName);
-                    // typedef long long ll;
-                    variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
-                    variableInfo.setContent(declaration.getRawSignature());
-                    variableInfo.setIsStructVariable(false);
-                    if (this.inserter != null) {
-                        variableInfo.createNode(inserter);
-                    }
-                    variableInfoList.add(variableInfo);
                 } else if (declSpecifier instanceof IASTElaboratedTypeSpecifier) {
                     // 不使用typedef名字进行声明的结构体变量
                     IASTElaboratedTypeSpecifier elaboratedTypeSpecifier = (IASTElaboratedTypeSpecifier) declSpecifier;
