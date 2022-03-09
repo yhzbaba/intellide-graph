@@ -3,6 +3,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Getter;
 import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
@@ -183,7 +184,8 @@ public class CCodeFileInfo {
                             CVariableInfo variableInfo = new CVariableInfo();
                             variableInfo.setSpecifier(simpleDeclSpecifier);
                             variableInfo.setSimpleDeclaration(simpleDeclaration);
-                            variableInfo.setName(declarator.getName().toString());
+                            String variableName = declarator.getName().toString();
+                            variableInfo.setName(variableName);
                             variableInfo.setBelongTo(fileName);
                             // typedef long long ll;
                             variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
@@ -193,6 +195,7 @@ public class CCodeFileInfo {
                                 variableInfo.createNode(inserter);
                             }
                             variableInfoList.add(variableInfo);
+                            VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
                         }
                     }
                 } else if (declSpecifier instanceof IASTElaboratedTypeSpecifier) {
@@ -204,8 +207,10 @@ public class CCodeFileInfo {
                     variableInfo.setBelongTo(fileName);
                     // typedef long long ll;
                     variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
+                    String variableName = "";
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
-                        variableInfo.setName(declarator.getName().toString());
+                        variableName = declarator.getName().toString();
+                        variableInfo.setName(variableName);
                     }
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(true);
@@ -217,6 +222,7 @@ public class CCodeFileInfo {
                         variableInfo.createNode(inserter);
                     }
                     variableInfoList.add(variableInfo);
+                    VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
                 } else if (declSpecifier instanceof ICASTTypedefNameSpecifier) {
                     // 使用typedef名字进行声明的结构体变量
                     ICASTTypedefNameSpecifier typedefNameSpecifier = (ICASTTypedefNameSpecifier) declSpecifier;
@@ -226,8 +232,10 @@ public class CCodeFileInfo {
                     variableInfo.setBelongTo(fileName);
                     // typedef long long ll;
                     variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
+                    String variableName = "";
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
-                        variableInfo.setName(declarator.getName().toString());
+                        variableName = declarator.getName().toString();
+                        variableInfo.setName(variableName);
                     }
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(true);
@@ -235,6 +243,7 @@ public class CCodeFileInfo {
                         variableInfo.createNode(inserter);
                     }
                     variableInfoList.add(variableInfo);
+                    VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
                 }
             }
         }

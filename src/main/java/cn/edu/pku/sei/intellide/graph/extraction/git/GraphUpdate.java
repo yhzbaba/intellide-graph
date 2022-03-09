@@ -166,7 +166,7 @@ public class GraphUpdate {
                 e.printStackTrace();
             }
             CCodeFileInfo codeFileInfo = new CCodeFileInfo(null, fileName, fileName.substring(fileName.lastIndexOf("//") + 1), translationUnit);
-            codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
+            codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameAndVariableNameList);
 
             /*
              * 调用 GumTree API 获得 edit actions
@@ -259,7 +259,7 @@ public class GraphUpdate {
         String[] lines = action.toString().split("\n");
         int i = 0;
         while(i < lines.length) {
-            if(lines[i].equals("===")) {
+            if("===".equals(lines[i])) {
                 editAction.type = lines[++i]; i += 2;
                 String tmp = lines[i];
                 editAction.tNode = tmp.substring(0, tmp.indexOf(" "));
@@ -579,7 +579,7 @@ public class GraphUpdate {
             e.printStackTrace();
         }
         CCodeFileInfo codeFileInfo = new CCodeFileInfo(null, fileName, fileName.substring(fileName.lastIndexOf("//") + 1), translationUnit);
-        codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameList);
+        codeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameAndVariableNameList);
 
         // 记录修改代码元素
         if(type.equals("add")) {
