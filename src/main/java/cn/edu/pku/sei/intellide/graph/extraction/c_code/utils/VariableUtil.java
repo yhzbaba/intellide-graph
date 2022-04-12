@@ -36,6 +36,8 @@ public class VariableUtil {
                 nameResult.addAll(getVariableNameFromIdExpression((IASTIdExpression) clause));
             } else if (clause instanceof IASTBinaryExpression) {
                 nameResult.addAll(getVariableNameFromBinaryExpression((IASTBinaryExpression) clause));
+            } else if (clause instanceof IASTLiteralExpression) {
+                nameResult.add(clause.getRawSignature());
             }
         }
 
@@ -66,7 +68,9 @@ public class VariableUtil {
                 IASTFunctionCallExpression functionCallExpression = (IASTFunctionCallExpression) node;
                 // 直接的函数调用语句
                 // 获取函数名
-                return getVariableNameFromFunctionCallExpression(functionCallExpression);
+                result.addAll(getVariableNameFromFunctionCallExpression(functionCallExpression));
+            } else if (node instanceof IASTBinaryExpression) {
+                result.addAll(getVariableNameFromBinaryExpression((IASTBinaryExpression) node));
             }
         }
         return result;

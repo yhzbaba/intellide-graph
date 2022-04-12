@@ -20,14 +20,14 @@ public class CVariableInfo {
      */
     @Getter
     @Setter
-    private String name;
+    private String name = "";
 
     /**
      * 内容 #define _TEST这样的设为""
      */
     @Getter
     @Setter
-    private String content;
+    private String content = "";
 
     /**
      * 属于哪里，或者是一个最外层的变量而已

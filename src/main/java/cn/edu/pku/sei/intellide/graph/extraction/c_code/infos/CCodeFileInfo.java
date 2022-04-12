@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
+import org.eclipse.cdt.internal.core.dom.parser.c.CASTDeclarator;
+import org.eclipse.cdt.internal.core.dom.parser.c.CASTFunctionDeclarator;
 import org.eclipse.cdt.internal.core.dom.parser.c.CASTParameterDeclaration;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
@@ -170,7 +172,7 @@ public class CCodeFileInfo {
                             functionInfo.setFullName(simpleDeclaration.getRawSignature());
                             functionInfo.setBelongToName(fileName + declarator.getName().toString());
                             functionInfo.setIsInline(false);
-                            functionInfo.setIsDefine(false);
+                            functionInfo.setIsDefine(true);
                             if (declSpecifier.getRawSignature().contains("const")) {
                                 functionInfo.setIsConst(true);
                             } else {
@@ -179,6 +181,7 @@ public class CCodeFileInfo {
                             if (this.inserter != null) {
                                 functionInfo.createNode(inserter);
                             }
+                            functionInfoList.add(functionInfo);
                         } else {
                             IASTSimpleDeclSpecifier simpleDeclSpecifier = (IASTSimpleDeclSpecifier) declSpecifier;
                             CVariableInfo variableInfo = new CVariableInfo();
@@ -214,7 +217,6 @@ public class CCodeFileInfo {
                     }
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(true);
-                    // FIXME: 暂时防止程序崩溃增加的条件
                     if (variableInfo.getName() == null) {
                         variableInfo.setName("default_name");
                     }
@@ -224,26 +226,48 @@ public class CCodeFileInfo {
                     variableInfoList.add(variableInfo);
                     VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
                 } else if (declSpecifier instanceof ICASTTypedefNameSpecifier) {
-                    // 使用typedef名字进行声明的结构体变量
-                    ICASTTypedefNameSpecifier typedefNameSpecifier = (ICASTTypedefNameSpecifier) declSpecifier;
-                    CVariableInfo variableInfo = new CVariableInfo();
-                    variableInfo.setSpecifier(typedefNameSpecifier);
-                    variableInfo.setSimpleDeclaration(simpleDeclaration);
-                    variableInfo.setBelongTo(fileName);
-                    // typedef long long ll;
-                    variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
-                    String variableName = "";
-                    for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
-                        variableName = declarator.getName().toString();
-                        variableInfo.setName(variableName);
+                    for (IASTNode node : declaration.getChildren()) {
+                        if (node instanceof IASTFunctionDeclarator) {
+                            CFunctionInfo functionInfo = new CFunctionInfo();
+                            functionInfo.setFunctionDefinition(null);
+                            functionInfo.setBelongTo(fileName);
+                            functionInfo.setName(((IASTFunctionDeclarator) node).getName().toString());
+                            functionInfo.setFullName(declaration.getRawSignature());
+                            functionInfo.setBelongToName(fileName + ((IASTFunctionDeclarator) node).getName().toString());
+                            functionInfo.setIsInline(false);
+                            functionInfo.setIsDefine(true);
+                            if (declSpecifier.getRawSignature().contains("const")) {
+                                functionInfo.setIsConst(true);
+                            } else {
+                                functionInfo.setIsConst(false);
+                            }
+                            if (this.inserter != null) {
+                                functionInfo.createNode(inserter);
+                            }
+                            functionInfoList.add(functionInfo);
+                        } else if (node instanceof IASTDeclarator) {
+                            // 使用typedef名字进行声明的结构体变量
+                            ICASTTypedefNameSpecifier typedefNameSpecifier = (ICASTTypedefNameSpecifier) declSpecifier;
+                            CVariableInfo variableInfo = new CVariableInfo();
+                            variableInfo.setSpecifier(typedefNameSpecifier);
+                            variableInfo.setSimpleDeclaration(simpleDeclaration);
+                            variableInfo.setBelongTo(fileName);
+                            // typedef long long ll;
+                            variableInfo.setIsDefine(ASTUtil.isTypeDef(declSpecifier));
+                            String variableName = "";
+                            for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
+                                variableName = declarator.getName().toString();
+                                variableInfo.setName(variableName);
+                            }
+                            variableInfo.setContent(declaration.getRawSignature());
+                            variableInfo.setIsStructVariable(true);
+                            if (this.inserter != null) {
+                                variableInfo.createNode(inserter);
+                            }
+                            variableInfoList.add(variableInfo);
+                            VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
+                        }
                     }
-                    variableInfo.setContent(declaration.getRawSignature());
-                    variableInfo.setIsStructVariable(true);
-                    if (this.inserter != null) {
-                        variableInfo.createNode(inserter);
-                    }
-                    variableInfoList.add(variableInfo);
-                    VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(variableName)].add(variableInfo);
                 }
             }
         }
@@ -281,6 +305,7 @@ public class CCodeFileInfo {
                     includeCodeFileList.add(fileName.substring(0, fileName.lastIndexOf('/') + 1) + includeStatement.getName().toString());
                 }
             } else if (statement instanceof IASTPreprocessorMacroDefinition) {
+                // 宏定义
                 IASTPreprocessorMacroDefinition macroDefinition = (IASTPreprocessorMacroDefinition) statement;
                 CVariableInfo variableInfo = new CVariableInfo();
                 variableInfo.setName(macroDefinition.getName().toString());
@@ -292,6 +317,7 @@ public class CCodeFileInfo {
                     variableInfo.createNode(inserter);
                 }
                 variableInfoList.add(variableInfo);
+                VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(macroDefinition.getName().toString())].add(variableInfo);
             }
         }
 //        deDuplication(includeCodeFileList);

@@ -70,7 +70,7 @@ public class CFunctionInfo {
      */
     public void initCallFunctionNameAndVariableNameList() {
         if (!isDefine) {
-            // 这不是宏函数
+            // 这不是宏函数, 也不是声明
             IASTCompoundStatement compoundStatement = (IASTCompoundStatement) functionDefinition.getBody();
             IASTStatement[] statements = compoundStatement.getStatements();
             List<String> callFunctionNameList = new ArrayList<>();
