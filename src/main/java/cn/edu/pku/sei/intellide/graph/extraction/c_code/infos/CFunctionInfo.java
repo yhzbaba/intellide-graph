@@ -56,7 +56,7 @@ public class CFunctionInfo {
     private IASTFunctionDefinition functionDefinition;
 
     /**
-     * 记录隐式调用时被调用的地方在哪里，文件名+函数名+函数内行号，有多个就直接往后面add
+     * 记录调用时被调用的地方在哪里，文件名+函数名+函数内行号，有多个就直接往后面add
      */
     @Getter
     @Setter
