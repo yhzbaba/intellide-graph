@@ -56,6 +56,13 @@ public class CFunctionInfo {
     private IASTFunctionDefinition functionDefinition;
 
     /**
+     * 记录隐式调用时被调用的地方在哪里，文件名+函数名+函数内行号，有多个就直接往后面add
+     */
+    @Getter
+    @Setter
+    private String invokePoint = "";
+
+    /**
      * 这个函数所调用的函数名的列表,初始化里面装的是调用的函数名列表，二次装的是belongToName
      */
     @Getter
