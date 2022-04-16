@@ -71,6 +71,8 @@ public class CFunctionInfo {
 
     private List<String> callVariableNameList = new ArrayList<>();
 
+    private List<NameFunctionStack> callFunctionNameStacks = new ArrayList<>();
+
     /**
      * 处理调用函数名列表
      * c05de99后更新：处理调用函数名列表和variable列表
@@ -83,13 +85,19 @@ public class CFunctionInfo {
             List<String> callFunctionNameList = new ArrayList<>();
             List<String> callVariableNameList = new ArrayList<>();
             for (IASTStatement statement : statements) {
+//                System.out.println(statement.getClass() + "->" + statement.getRawSignature());
                 if (statement instanceof IASTReturnStatement) {
                     // return语句 可能出现函数调用 return fun1(2); return fun1(2) < fun2 (4);
                     callFunctionNameList.addAll(FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement) statement));
                     callVariableNameList.addAll(VariableUtil.getVariableNameFromReturnStatement((IASTReturnStatement) statement));
                 } else if (statement instanceof IASTDeclarationStatement) {
                     // int res = test1();
-//                    System.out.println("? " + statement.getClass() + "->" + statement.getRawSignature());
+                    // CASTSimpleDeclaration->void (*fun)();
+                    // CASTSimpleDeclaration->void (*fun)() = PFB_1;
+                    // 后续：返回类型为typedef名字，在ExpressionStatement那里!!!(haven't done yet)
+//                    System.out.println(((IASTDeclarationStatement) statement).getDeclaration().getClass());
+//                    System.out.println(((IASTDeclarationStatement) statement).getDeclaration().getClass() + "->"
+//                            + ((IASTDeclarationStatement) statement).getDeclaration().getRawSignature());
                     callFunctionNameList.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
                     callVariableNameList.addAll(VariableUtil.getVariableNameFromDeclarationStatement((IASTDeclarationStatement) statement));
                 } else if (statement instanceof IASTExpressionStatement) {
@@ -111,6 +119,7 @@ public class CFunctionInfo {
                 }
             }
             List<String> filteredFunctionNameList = callFunctionNameList.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
+            System.out.println(name + "->" + filteredFunctionNameList);
             setCallFunctionNameList(filteredFunctionNameList);
             List<String> filteredVariableNameList = callVariableNameList.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
             setCallVariableNameList(filteredVariableNameList);

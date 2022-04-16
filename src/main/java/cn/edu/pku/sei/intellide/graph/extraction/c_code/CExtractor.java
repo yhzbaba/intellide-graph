@@ -44,6 +44,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final String ISSTRUCTVARIABLE = "isStructVariable";
     public static final String FILEFULLNAME = "fileFullName";
     public static final String TAILFILENAME = "tailFileName";
+    public static final String ISFUNCTIONPOINTER = "isFunctionPointer";
 
     @Override
     public boolean isBatchInsert() {

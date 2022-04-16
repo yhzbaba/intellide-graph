@@ -60,6 +60,8 @@ public class FunctionUtil {
                 // 直接的函数调用语句
                 // 获取函数名
                 return getFunctionNameFromFunctionCallExpression(functionCallExpression);
+            } else if (node instanceof IASTBinaryExpression) {
+                return getFunctionNameFromBinaryExpression((IASTBinaryExpression) node);
             }
         }
         return result;

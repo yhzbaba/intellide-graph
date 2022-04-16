@@ -165,23 +165,46 @@ public class CCodeFileInfo {
                 if (declSpecifier instanceof IASTSimpleDeclSpecifier) {
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
                         if (declarator instanceof IASTFunctionDeclarator) {
-                            CFunctionInfo functionInfo = new CFunctionInfo();
-                            functionInfo.setFunctionDefinition(null);
-                            functionInfo.setBelongTo(fileName);
-                            functionInfo.setName(declarator.getName().toString());
-                            functionInfo.setFullName(simpleDeclaration.getRawSignature());
-                            functionInfo.setBelongToName(fileName + declarator.getName().toString());
-                            functionInfo.setIsInline(false);
-                            functionInfo.setIsDefine(true);
-                            if (declSpecifier.getRawSignature().contains("const")) {
-                                functionInfo.setIsConst(true);
+                            // (*fun)() common_fun() (*fun)() = &PFB_2
+                            if (!"".equals(declarator.getName().toString())) {
+                                //common_fun()
+                                CFunctionInfo functionInfo = new CFunctionInfo();
+                                functionInfo.setFunctionDefinition(null);
+                                functionInfo.setBelongTo(fileName);
+                                functionInfo.setName(declarator.getName().toString());
+                                functionInfo.setFullName(simpleDeclaration.getRawSignature());
+                                functionInfo.setBelongToName(fileName + declarator.getName().toString());
+                                functionInfo.setIsInline(false);
+                                functionInfo.setIsDefine(true);
+                                if (declSpecifier.getRawSignature().contains("const")) {
+                                    functionInfo.setIsConst(true);
+                                } else {
+                                    functionInfo.setIsConst(false);
+                                }
+                                if (this.inserter != null) {
+                                    functionInfo.createNode(inserter);
+                                }
+                                functionInfoList.add(functionInfo);
                             } else {
-                                functionInfo.setIsConst(false);
+                                // (*fun)() (*fun)() = &PFB_2
+                                CVariableInfo info = new CVariableInfo();
+                                info.setContent("");
+                                info.setBelongTo(fileName);
+                                if (declarator.getNestedDeclarator() != null) {
+                                    info.setName(declarator.getNestedDeclarator().getRawSignature());
+                                }
+                                if (declarator.getInitializer() != null) {
+                                    info.setEqualsInitializer(declarator.getInitializer());
+                                }
+                                info.setIsDefine(false);
+                                info.setIsStructVariable(false);
+                                info.setIsFunctionPointer(true);
+                                if (this.inserter != null) {
+                                    info.createNode(inserter);
+                                }
+                                variableInfoList.add(info);
+                                VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(info.getName())].add(info);
                             }
-                            if (this.inserter != null) {
-                                functionInfo.createNode(inserter);
-                            }
-                            functionInfoList.add(functionInfo);
                         } else {
                             IASTSimpleDeclSpecifier simpleDeclSpecifier = (IASTSimpleDeclSpecifier) declSpecifier;
                             CVariableInfo variableInfo = new CVariableInfo();
