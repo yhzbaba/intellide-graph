@@ -2,6 +2,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Getter;
@@ -36,6 +37,10 @@ public class CCodeFileInfo {
     @Getter
     @Setter
     private List<CVariableInfo> variableInfoList = new ArrayList<>();
+
+    @Getter
+    @Setter
+    private List<CVariableInfo> functionPointerList = new ArrayList<>();
 
     private BatchInserter inserter = null;
 
@@ -203,6 +208,8 @@ public class CCodeFileInfo {
                                     info.createNode(inserter);
                                 }
                                 variableInfoList.add(info);
+                                functionPointerList.add(info);
+                                FunctionPointerUtil.FUNCTION_POINTER_HASH_LIST[FunctionPointerUtil.hashFunctionPointer(info.getName())].add(info);
                                 VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(info.getName())].add(info);
                             }
                         } else {

@@ -61,4 +61,17 @@ public class NumedStatement {
                 ", statement=" + statement.getRawSignature() +
                 '}';
     }
+
+    public Boolean isSameLayer(NumedStatement statement) {
+        if (layer.size() == statement.layer.size()) {
+            for (int i = 0; i < layer.size(); i++) {
+                if (!layer.get(i).equals(statement.layer.get(i))) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            return false;
+        }
+    }
 }

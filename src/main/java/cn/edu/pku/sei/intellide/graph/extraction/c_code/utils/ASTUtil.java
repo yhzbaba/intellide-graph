@@ -5,10 +5,10 @@ import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 
 public class ASTUtil {
-    public static String getClassStructName(IASTSimpleDeclaration simpleDeclaration){
-        IASTDeclSpecifier declSpecifier=simpleDeclaration.getDeclSpecifier();
-        if(declSpecifier instanceof ICPPASTCompositeTypeSpecifier){
-            return ((ICPPASTCompositeTypeSpecifier)declSpecifier).getName().toString();
+    public static String getClassStructName(IASTSimpleDeclaration simpleDeclaration) {
+        IASTDeclSpecifier declSpecifier = simpleDeclaration.getDeclSpecifier();
+        if (declSpecifier instanceof ICPPASTCompositeTypeSpecifier) {
+            return ((ICPPASTCompositeTypeSpecifier) declSpecifier).getName().toString();
         }
         return "";
     }
@@ -21,7 +21,9 @@ public class ASTUtil {
     }
 
     public static boolean hasPointerType(final IASTDeclarator declarator) {
-        if (declarator == null) return false;
+        if (declarator == null) {
+            return false;
+        }
 
         if (declarator instanceof IASTArrayDeclarator) {
             final IASTArrayDeclarator arrayDecl = (IASTArrayDeclarator) declarator;
@@ -41,5 +43,14 @@ public class ASTUtil {
         }
 
         return false;
+    }
+
+    public static int hashCode(String key, int arraySize) {
+        int hashCode = 0;
+        for (int i = 0; i < key.length(); i++) {
+            int letterValue = key.charAt(i) - 40;
+            hashCode = ((hashCode << 5) + letterValue + arraySize) % arraySize;
+        }
+        return hashCode;
     }
 }

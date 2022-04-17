@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Data;
@@ -41,6 +42,8 @@ public class CFunctionInfo {
     @Setter
     private String belongToName;
 
+    private BatchInserter inserter = null;
+
     /**
      * 当isDefine为true此属性才有效
      */
@@ -56,7 +59,7 @@ public class CFunctionInfo {
     private IASTFunctionDefinition functionDefinition;
 
     /**
-     * 记录调用时被调用的地方在哪里，文件名+函数名+函数内行号，有多个就直接往后面add
+     * 记录调用时被调用的地方在哪里，文件名+函数名+函数内位置，有多个就直接往后面add
      */
     @Getter
     @Setter
@@ -93,13 +96,63 @@ public class CFunctionInfo {
             IASTCompoundStatement compoundStatement = (IASTCompoundStatement) functionDefinition.getBody();
             statementList.addAll(FunctionUtil.getStatementsFromCompound(compoundStatement, startLayer));
             numOfStatements = statementList.size();
-            System.out.println("****************" + name + "*****************");
-            for (NumedStatement statement : statementList) {
-                System.out.println(statement);
-            }
 //            for (int i = numOfStatements - 1; i >= 0; i--) {
 //                System.out.println(statementList.get(i));
 //            }
+        }
+    }
+
+    public void processImplicitInvoke() {
+        System.out.println("****************" + name + "*****************");
+        if (!isDefine) {
+            for (int i = numOfStatements - 1; i >= 0; i--) {
+                // 先从后往前检查每个小句子，得到可能的隐式调用点
+                NumedStatement numedStatement = statementList.get(i);
+                IASTStatement statement = numedStatement.getStatement();
+                List<String> invokePoints = new ArrayList<>();
+                if (statement instanceof IASTReturnStatement) {
+                    invokePoints.addAll(FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement) statement));
+                } else if (statement instanceof IASTDeclarationStatement) {
+                    invokePoints.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
+                } else if (statement instanceof IASTExpressionStatement) {
+                    invokePoints.addAll(FunctionPointerUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
+                }
+                // 这句话的可能隐式调用点拿到了，遍历它们，再从这个位置往前寻找定义点(1)
+                // 如果找不到找全局(2)
+                // 再找不到说明显式调用，交给下一步去做就行了
+                // 找定义点的时候只检查本块 + 上层，本层其他块不检查
+                for (String invokePoint : invokePoints) {
+                    for (int j = i - 1; j >= 0; j--) {
+                        NumedStatement numedCheckDeclare = statementList.get(j);
+                        if (numedStatement.isSameLayer(numedCheckDeclare) ||
+                                numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size()) {
+                            IASTStatement checkDeclare = numedCheckDeclare.getStatement();
+                            if (checkDeclare instanceof IASTDeclarationStatement) {
+                                String declareResult = FunctionPointerUtil.getDeclarationName((IASTDeclarationStatement) checkDeclare);
+                                String tempInvokePoint = invokePoint;
+                                String tempDeclareResult = declareResult;
+                                if (!tempInvokePoint.startsWith("*")) {
+                                    tempInvokePoint = "*" + invokePoint;
+                                }
+                                if (!tempDeclareResult.startsWith("*")) {
+                                    tempDeclareResult = "*" + declareResult;
+                                }
+                                if (tempDeclareResult.equals(tempInvokePoint)) {
+                                    // 用函数名匹配到变量定义了，那么持久化这个隐式调用点
+                                    System.out.println(tempDeclareResult + " " + tempInvokePoint);
+
+                                    break;
+                                }
+                            }
+                        }
+                        if (j == 0) {
+                            // 到这检查完函数的第一句话了，没有，那么就检查全局指针
+                            // 匹配到了，那么持久化这个隐式调用点
+                            break;
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -166,6 +219,7 @@ public class CFunctionInfo {
     }
 
     public long createNode(BatchInserter inserter) {
+        this.inserter = inserter;
         if (id != -1) {
             return id;
         }

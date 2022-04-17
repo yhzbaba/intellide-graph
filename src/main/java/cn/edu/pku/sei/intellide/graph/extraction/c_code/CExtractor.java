@@ -6,6 +6,7 @@ import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CProjectInfo;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CVariableInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import org.eclipse.core.runtime.CoreException;
@@ -22,6 +23,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final Label c_struct = Label.label("c_struct");
     public static final Label c_field = Label.label("c_field");
     public static final Label c_function = Label.label("c_function");
+    public static final Label c_imp_invoke = Label.label("c_imp_invoke");
     public static final Label c_variable = Label.label("c_variable");
     public static final RelationshipType define = RelationshipType.withName("define");
     public static final RelationshipType include = RelationshipType.withName("include");
@@ -45,6 +47,8 @@ public class CExtractor extends KnowledgeExtractor {
     public static final String FILEFULLNAME = "fileFullName";
     public static final String TAILFILENAME = "tailFileName";
     public static final String ISFUNCTIONPOINTER = "isFunctionPointer";
+    public static final String LAYER = "layer";
+    public static final String SEQNUM = "seqNum";
 
     @Override
     public boolean isBatchInsert() {
@@ -59,6 +63,9 @@ public class CExtractor extends KnowledgeExtractor {
         }
         for (int i = 0; i < VariableUtil.SIZE_OF_VARIABLE_HASH_SET; i++) {
             VariableUtil.VARIABLE_HASH_LIST[i] = new ArrayList<>();
+        }
+        for (int i = 0; i < FunctionPointerUtil.SIZE_OF_FUNCTION_POINTER_HASH_SET; i++) {
+            FunctionPointerUtil.FUNCTION_POINTER_HASH_LIST[i] = new ArrayList<>();
         }
         BatchInserter inserter = this.getInserter();
         try {
@@ -103,6 +110,7 @@ public class CExtractor extends KnowledgeExtractor {
             cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                 cFunctionInfo.initCallFunctionNameAndVariableNameList();
                 cFunctionInfo.initNumberedStatementList();
+                cFunctionInfo.processImplicitInvoke();
             });
             if (inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
