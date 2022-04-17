@@ -100,7 +100,10 @@ public class CExtractor extends KnowledgeExtractor {
      */
     public static void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
         projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-            cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::initCallFunctionNameAndVariableNameList);
+            cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
+                cFunctionInfo.initCallFunctionNameAndVariableNameList();
+                cFunctionInfo.initNumberedStatementList();
+            });
             if (inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     // 对函数调用的每一个函数查询其所属信息

@@ -1,10 +1,12 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.NumedStatement;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 public class FunctionUtil {
@@ -148,5 +150,91 @@ public class FunctionUtil {
             hashCode = ((hashCode << 5) + letterValue + arraySize) % arraySize;//防止编码溢出，对每步结果都进行取模运算
         }
         return hashCode;
+    }
+
+    /**
+     *
+     *
+     * 以下都是函数指针分析相关--------------------------------------------------------------------------------------
+     *
+     *
+     */
+
+    /**
+     * @param compound   就是一个语句簇
+     * @param startLayer 这个compound作为整体在函数中的层的一个list
+     * @return 一个NumedStatement序列
+     */
+    public static List<NumedStatement> getStatementsFromCompound(IASTCompoundStatement compound,
+                                                                 List<Integer> startLayer) {
+        List<NumedStatement> result = new ArrayList<>();
+        IASTStatement[] statements = compound.getStatements();
+        // seqNum就是这个块里面的语句的序号，每次递增就行
+        int seqNum = 1;
+        // layerNum就是计算同一层数到第几块了
+        int layerNum = 1;
+        for (IASTStatement statement : statements) {
+            if (haveCompoundNode(statement)) {
+                // 说明这是个复合语句体，例如if、for
+                List<IASTCompoundStatement> tempCompoundList = getCompoundFromStatement(statement);
+                for (IASTCompoundStatement singleCompound : tempCompoundList) {
+                    // if的多个分支不能当成同一层级的同一块，必须当成同一层级的不同的块
+                    // 外面有定义a，if里面定义a，else里面的a应该是外面的，
+                    // 我的判断定义点逻辑是只判断自己这块和上层的，同一块的其他层中的定义我不会看
+                    List<Integer> tempLayer = new ArrayList<>(startLayer);
+                    tempLayer.add(layerNum);
+                    result.addAll(getStatementsFromCompound(singleCompound, tempLayer));
+                    layerNum++;
+                }
+            } else if (statement instanceof IASTCompoundStatement) {
+                // 说明这是个简单的块，直接拿大括号括起来那种
+                List<Integer> tempLayer = new ArrayList<>(startLayer);
+                tempLayer.add(layerNum);
+                result.addAll(getStatementsFromCompound((IASTCompoundStatement) statement, tempLayer));
+                layerNum++;
+            } else {
+                // 说明是简单语句，可以标识layer结尾
+                NumedStatement simpleStatement = new NumedStatement(statement);
+                simpleStatement.addLayer(startLayer);
+                simpleStatement.addLayer(-1);
+                simpleStatement.setSeqNum(seqNum);
+                result.add(simpleStatement);
+            }
+
+            seqNum++;
+        }
+
+        return result;
+    }
+
+    /**
+     * @param statement 一个语句，如果是if，那么会包含if里的那个块
+     * @return 如果语句里包含嵌套Compound，返回true
+     */
+    public static Boolean haveCompoundNode(IASTStatement statement) {
+        for (IASTNode node : statement.getChildren()) {
+            if (node instanceof IASTCompoundStatement) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 如果是含有compound的，把compound揪出来
+     *
+     * @param statement
+     * @return
+     */
+    public static List<IASTCompoundStatement> getCompoundFromStatement(IASTStatement statement) {
+        List<IASTCompoundStatement> result = new ArrayList<>();
+        for (IASTNode node : statement.getChildren()) {
+            if (node instanceof IASTCompoundStatement) {
+                result.add((IASTCompoundStatement) node);
+            } else if (node instanceof IASTIfStatement) {
+                result.addAll(getCompoundFromStatement((IASTStatement) node));
+            }
+        }
+        return result;
     }
 }

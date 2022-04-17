@@ -74,6 +74,36 @@ public class CFunctionInfo {
     private List<NameFunctionStack> callFunctionNameStacks = new ArrayList<>();
 
     /**
+     * 按递归顺序拆分语句
+     */
+    private List<NumedStatement> statementList = new ArrayList<>();
+
+    /**
+     * statementList的长度
+     */
+    private int numOfStatements = 0;
+
+    /**
+     * 初始化语句列表
+     */
+    public void initNumberedStatementList() {
+        if (!isDefine) {
+            List<Integer> startLayer = new ArrayList<>();
+            startLayer.add(1);
+            IASTCompoundStatement compoundStatement = (IASTCompoundStatement) functionDefinition.getBody();
+            statementList.addAll(FunctionUtil.getStatementsFromCompound(compoundStatement, startLayer));
+            numOfStatements = statementList.size();
+            System.out.println("****************" + name + "*****************");
+            for (NumedStatement statement : statementList) {
+                System.out.println(statement);
+            }
+//            for (int i = numOfStatements - 1; i >= 0; i--) {
+//                System.out.println(statementList.get(i));
+//            }
+        }
+    }
+
+    /**
      * 处理调用函数名列表
      * c05de99后更新：处理调用函数名列表和variable列表
      */
@@ -85,7 +115,6 @@ public class CFunctionInfo {
             List<String> callFunctionNameList = new ArrayList<>();
             List<String> callVariableNameList = new ArrayList<>();
             for (IASTStatement statement : statements) {
-//                System.out.println(statement.getClass() + "->" + statement.getRawSignature());
                 if (statement instanceof IASTReturnStatement) {
                     // return语句 可能出现函数调用 return fun1(2); return fun1(2) < fun2 (4);
                     callFunctionNameList.addAll(FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement) statement));
@@ -119,7 +148,6 @@ public class CFunctionInfo {
                 }
             }
             List<String> filteredFunctionNameList = callFunctionNameList.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
-            System.out.println(name + "->" + filteredFunctionNameList);
             setCallFunctionNameList(filteredFunctionNameList);
             List<String> filteredVariableNameList = callVariableNameList.stream().filter(string -> !string.isEmpty()).collect(Collectors.toList());
             setCallVariableNameList(filteredVariableNameList);
