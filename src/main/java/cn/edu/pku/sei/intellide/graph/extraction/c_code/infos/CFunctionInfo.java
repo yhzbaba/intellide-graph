@@ -76,6 +76,8 @@ public class CFunctionInfo {
 
     private List<NameFunctionStack> callFunctionNameStacks = new ArrayList<>();
 
+    private List<String> includeFileList = new ArrayList<>();
+
     /**
      * 按递归顺序拆分语句
      */
@@ -102,7 +104,7 @@ public class CFunctionInfo {
         }
     }
 
-    public void buildImpInvoke(String invokePoint, NumedStatement numedStatement) {
+    public CImplicitInvokePoint buildImpInvoke(String invokePoint, NumedStatement numedStatement) {
         CImplicitInvokePoint point = new CImplicitInvokePoint(invokePoint,
                 numedStatement.getLayer(),
                 numedStatement.getSeqNum());
@@ -110,10 +112,10 @@ public class CFunctionInfo {
             long pointId = point.createNode(inserter);
             inserter.createRelationship(getId(), pointId, CExtractor.has_imp, new HashMap<>());
         }
+        return point;
     }
 
     public void processImplicitInvoke() {
-        System.out.println("****************" + name + "*****************");
         if (!isDefine) {
             for (int i = numOfStatements - 1; i >= 0; i--) {
                 // 先从后往前检查每个小句子，得到可能的隐式调用点
@@ -134,11 +136,11 @@ public class CFunctionInfo {
                 for (String invokePoint : invokePoints) {
                     for (int j = i - 1; j >= 0; j--) {
                         NumedStatement numedCheckDeclare = statementList.get(j);
-                        if (numedStatement.isSameLayer(numedCheckDeclare) ||
-                                numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size()) {
+                        if ((numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
+                                || numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size()) {
                             IASTStatement checkDeclare = numedCheckDeclare.getStatement();
                             if (checkDeclare instanceof IASTDeclarationStatement) {
-                                String declareResult = FunctionPointerUtil.getDeclarationName((IASTDeclarationStatement) checkDeclare);
+                                String declareResult = FunctionPointerUtil.getDeclarationLeftName((IASTDeclarationStatement) checkDeclare);
                                 String tempInvokePoint = invokePoint;
                                 String tempDeclareResult = declareResult;
                                 if (!tempInvokePoint.startsWith("*")) {
@@ -148,8 +150,13 @@ public class CFunctionInfo {
                                     tempDeclareResult = "*" + declareResult;
                                 }
                                 if (tempDeclareResult.equals(tempInvokePoint)) {
-                                    // 用函数名匹配到变量定义了，那么持久化这个隐式调用点
-                                    buildImpInvoke(invokePoint, numedStatement);
+                                    // 用函数名匹配到变量定义了，那么持久化这个隐式调用点，然后直接检查下一个invokePoint
+                                    CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
+                                    List<CFunctionInfo> probInvokeList = getProbInvokeList(numedCheckDeclare, numedStatement, invokePoint);
+                                    point.setProbInvokeFunctions(probInvokeList);
+                                    point.getProbInvokeFunctions().forEach(invokeFunc -> {
+                                        inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
+                                    });
                                     break;
                                 }
                             }
@@ -161,24 +168,24 @@ public class CFunctionInfo {
                                 // (*fun)();
                                 CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                                 if (info != null) {
-                                    buildImpInvoke(invokePoint, numedStatement);
+                                    buildAndInvoke(numedStatement, invokePoint, info);
                                 } else {
                                     String temp = invokePoint.substring(1);
                                     info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
                                     if (info != null) {
-                                        buildImpInvoke(invokePoint, numedStatement);
+                                        buildAndInvoke(numedStatement, invokePoint, info);
                                     }
                                 }
                             } else {
                                 // fun();
                                 CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                                 if (info != null) {
-                                    buildImpInvoke(invokePoint, numedStatement);
+                                    buildAndInvoke(numedStatement, invokePoint, info);
                                 } else {
                                     String temp = "*" + invokePoint;
                                     info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
                                     if (info != null) {
-                                        buildImpInvoke(invokePoint, numedStatement);
+                                        buildAndInvoke(numedStatement, invokePoint, info);
                                     }
                                 }
                             }
@@ -188,6 +195,126 @@ public class CFunctionInfo {
                 }
             }
         }
+    }
+
+    private void buildAndInvoke(NumedStatement numedStatement, String invokePoint, CVariableInfo info) {
+        CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
+        if (info.getEqualsInitializer() != null) {
+            for (IASTNode node : info.getEqualsInitializer().getChildren()) {
+                if (node instanceof IASTUnaryExpression) {
+                    point.setProbInvokeFunctions(FunctionPointerUtil.getInvokeFunctions(
+                            includeFileList,
+                            belongTo,
+                            ((IASTUnaryExpression) node).getOperand().getRawSignature()));
+                    point.getProbInvokeFunctions().forEach(invokeFunc -> {
+                        inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * 目前解决的挂钩情况：[直接的函数地址挂钩]
+     * 从后往前检查挂钩情况：
+     * 同一块，若有检查到就直接停（1）
+     * 若（1）中没有，起点终点间整个遍历，有就算（2）
+     *
+     * @param startStatement 从哪一句开始检查起
+     * @param endStatement   检查到哪句话之前
+     * @return 可能的被调用的函数结点
+     */
+    public List<CFunctionInfo> getProbInvokeList(
+            NumedStatement startStatement,
+            NumedStatement endStatement,
+            String invokePoint) {
+        List<CFunctionInfo> result = new ArrayList<>();
+        String tempInvokePoint = "";
+        // 让tempInvokePoint确保是*开头
+        if (!invokePoint.startsWith("*")) {
+            tempInvokePoint = "*" + invokePoint;
+        }
+        // 先检查同一块
+        int t1 = 0;
+        for (int i = numOfStatements - 1; i >= 0; i--) {
+            NumedStatement check = statementList.get(i);
+            if (!(check.isSameLayer(endStatement) && check.getSeqNum() == endStatement.getSeqNum()) && t1 == 0) {
+                continue;
+            } else {
+                t1 = 1;
+            }
+            if (check.isSameLayer(startStatement) && check.getSeqNum() == startStatement.getSeqNum()) {
+                // 说明在同一块检查到declare那句话了
+                IASTStatement statement = check.getStatement();
+                if (statement instanceof IASTDeclarationStatement) {
+                    List<CFunctionInfo> list = FunctionPointerUtil.getInvokeFunctions(
+                            includeFileList,
+                            belongTo,
+                            FunctionPointerUtil.getDeclarationRightName((IASTDeclarationStatement) statement)
+                    );
+                    if (list.size() > 0) {
+                        result.addAll(list);
+                        return result;
+                    }
+                }
+                break;
+            }
+            if (endStatement.isSameLayer(check) && endStatement.getSeqNum() > check.getSeqNum()) {
+                // 这里的check都是同一块的
+                IASTStatement checkStatement = check.getStatement();
+                if (checkStatement instanceof IASTExpressionStatement) {
+                    List<CFunctionInfo> list = FunctionPointerUtil.getFunctionListFromExpressionStatement(
+                            (IASTExpressionStatement) checkStatement,
+                            invokePoint,
+                            tempInvokePoint,
+                            includeFileList,
+                            belongTo);
+                    if (list.size() > 0) {
+                        result.addAll(list);
+                        return result;
+                    }
+                }
+            }
+        }
+        t1 = 0;
+        for (int i = numOfStatements - 1; i >= 0; i--) {
+            NumedStatement check = statementList.get(i);
+            if (!(check.isSameLayer(endStatement) && check.getSeqNum() == endStatement.getSeqNum()) && t1 == 0) {
+                continue;
+            } else {
+                t1 = 1;
+            }
+            if (check.isSameLayer(startStatement) && check.getSeqNum() == startStatement.getSeqNum()) {
+                // 说明检查到declare那句话了
+                IASTStatement statement = check.getStatement();
+                if (statement instanceof IASTDeclarationStatement) {
+                    List<CFunctionInfo> list = FunctionPointerUtil.getInvokeFunctions(
+                            includeFileList,
+                            belongTo,
+                            FunctionPointerUtil.getDeclarationRightName((IASTDeclarationStatement) statement)
+                    );
+                    result.addAll(list);
+                    return result;
+                }
+                break;
+            }
+            if (!check.isSameLayer(endStatement)) {
+                IASTStatement checkStatement = check.getStatement();
+                if (checkStatement instanceof IASTExpressionStatement) {
+                    List<CFunctionInfo> list = FunctionPointerUtil.getFunctionListFromExpressionStatement(
+                            (IASTExpressionStatement) checkStatement,
+                            invokePoint,
+                            tempInvokePoint,
+                            includeFileList,
+                            belongTo);
+                    if (list.size() > 0) {
+                        // 第二个循环是有多少就算多少，不用break
+                        result.addAll(list);
+                    }
+                }
+            }
+        }
+        return result;
     }
 
     /**

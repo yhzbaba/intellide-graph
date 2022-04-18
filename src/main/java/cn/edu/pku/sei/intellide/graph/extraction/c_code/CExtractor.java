@@ -30,6 +30,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final RelationshipType member_of = RelationshipType.withName("member_of");
     public static final RelationshipType invoke = RelationshipType.withName("invoke");
     public static final RelationshipType has_imp = RelationshipType.withName("has_imp");
+    public static final RelationshipType imp_invoke = RelationshipType.withName("imp_invoke");
     public static final String NAME = "name";
     public static final String FILENAME = "fileName";
     public static final String FULLNAME = "fullName";
@@ -109,6 +110,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static void createInvokeRelations(CProjectInfo projectInfo, BatchInserter inserter) {
         projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
             cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
+                cFunctionInfo.setIncludeFileList(cCodeFileInfo.getIncludeCodeFileList());
                 cFunctionInfo.initCallFunctionNameAndVariableNameList();
                 cFunctionInfo.initNumberedStatementList();
                 cFunctionInfo.processImplicitInvoke();

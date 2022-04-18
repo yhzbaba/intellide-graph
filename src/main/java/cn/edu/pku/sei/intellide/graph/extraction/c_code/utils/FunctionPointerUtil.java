@@ -1,6 +1,9 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CCodeFileInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CVariableInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.NumedStatement;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
@@ -80,7 +83,13 @@ public class FunctionPointerUtil {
         return nameResult;
     }
 
-    public static String getDeclarationName(IASTDeclarationStatement statement) {
+    /**
+     * 声明的那个变量名
+     *
+     * @param statement 这句话
+     * @return 左值
+     */
+    public static String getDeclarationLeftName(IASTDeclarationStatement statement) {
         IASTDeclaration declaration = statement.getDeclaration();
         if (declaration instanceof IASTSimpleDeclaration) {
             for (IASTDeclarator declarator : ((IASTSimpleDeclaration) declaration).getDeclarators()) {
@@ -88,6 +97,22 @@ public class FunctionPointerUtil {
                     return declarator.getNestedDeclarator().getRawSignature();
                 } else {
                     return declarator.getName().toString();
+                }
+            }
+        }
+        return "";
+    }
+
+    public static String getDeclarationRightName(IASTDeclarationStatement statement) {
+        IASTDeclaration declaration = statement.getDeclaration();
+        if (declaration instanceof IASTSimpleDeclaration) {
+            for (IASTDeclarator declarator : ((IASTSimpleDeclaration) declaration).getDeclarators()) {
+                if (declarator.getInitializer() != null) {
+                    for (IASTNode node : declarator.getInitializer().getChildren()) {
+                        if (node instanceof IASTUnaryExpression) {
+                            return ((IASTUnaryExpression) node).getOperand().getRawSignature();
+                        }
+                    }
                 }
             }
         }
@@ -120,5 +145,72 @@ public class FunctionPointerUtil {
             }
         }
         return VariableUtil.isIncludeVariable(variableName, belongTo);
+    }
+
+    public static List<CFunctionInfo> getInvokeFunctions(List<String> includeFileList,
+                                                         String belongTo,
+                                                         String name) {
+        List<CFunctionInfo> res = new ArrayList<>();
+        List<CFunctionInfo> tempList = FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(name)];
+        if (tempList.size() > 1) {
+            for (CFunctionInfo info : tempList) {
+                if (belongTo.equals(info.getBelongTo())) {
+                    // (2)
+                    res.add(info);
+                } else {
+                    for (String includeFileName : includeFileList) {
+                        if (includeFileName.contains(info.getBelongTo())) {
+                            // (1)
+                            res.add(info);
+                        }
+                    }
+                }
+            }
+        } else if (tempList.size() == 1) {
+            CFunctionInfo only = tempList.get(0);
+            // 只查到了一个那就直接扔进去 不然也没啥意义了
+            res.add(only);
+        }
+
+        return res;
+    }
+
+    /**
+     * fun = &function;
+     *
+     * @param checkStatement  这句话
+     * @param invokePoint     fun
+     * @param tempInvokePoint *fun
+     * @param includeFileList 这个文件的includeFileList
+     * @param belongTo        所属文件名
+     * @return function对应的函数实体
+     */
+    public static List<CFunctionInfo> getFunctionListFromExpressionStatement(IASTExpressionStatement checkStatement,
+                                                                             String invokePoint,
+                                                                             String tempInvokePoint,
+                                                                             List<String> includeFileList,
+                                                                             String belongTo) {
+        List<CFunctionInfo> result = new ArrayList<>();
+        for (IASTNode node : checkStatement.getChildren()) {
+            if (node instanceof IASTBinaryExpression) {
+                IASTBinaryExpression binaryNode = (IASTBinaryExpression) node;
+                if (binaryNode.getOperator() == 17) {
+                    // 17说明是赋值语句
+                    String operand1 = binaryNode.getOperand1().getRawSignature();
+                    if (!operand1.startsWith("*")) {
+                        operand1 = "*" + operand1;
+                    }
+                    if (operand1.equals(invokePoint) || operand1.equals(tempInvokePoint)) {
+                        String operand2 = binaryNode.getInitOperand2().getRawSignature();
+                        // 确定右侧不以&开头
+                        if (operand2.startsWith("&")) {
+                            operand2 = operand2.substring(1);
+                        }
+                        result.addAll(FunctionPointerUtil.getInvokeFunctions(includeFileList, belongTo, operand2));
+                    }
+                }
+            }
+        }
+        return result;
     }
 }
