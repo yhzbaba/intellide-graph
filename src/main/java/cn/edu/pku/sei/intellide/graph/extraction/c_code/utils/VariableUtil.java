@@ -144,4 +144,27 @@ public class VariableUtil {
     public static int hashVariable(String key) {
         return ASTUtil.hashCode(key, SIZE_OF_VARIABLE_HASH_SET);
     }
+
+    public static CVariableInfo isIncludeVariable(String variableName, String belongTo) {
+        for (CVariableInfo info : VARIABLE_HASH_LIST[hashVariable(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                if (info.getBelongTo().equals(belongTo)) {
+                    return info;
+                }
+            }
+        }
+        for (CVariableInfo info : VARIABLE_HASH_LIST[hashVariable(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                if (info.getEqualsInitializer() != null) {
+                    return info;
+                }
+            }
+        }
+        for (CVariableInfo info : VARIABLE_HASH_LIST[hashVariable(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                return info;
+            }
+        }
+        return null;
+    }
 }

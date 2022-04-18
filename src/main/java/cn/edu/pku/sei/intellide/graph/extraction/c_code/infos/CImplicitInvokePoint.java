@@ -24,6 +24,21 @@ public class CImplicitInvokePoint {
 
     private List<CFunctionInfo> probInvokeFunctions = new ArrayList<>();
 
+    public void setLayerFromList(List<Integer> layerList) {
+        StringBuilder buffer = new StringBuilder();
+        for (Integer i : layerList) {
+            buffer.append(i);
+            buffer.append(",");
+        }
+        layer = buffer.toString();
+    }
+
+    public CImplicitInvokePoint(String name, List<Integer> layerList, Integer seqNum) {
+        this.name = name;
+        setLayerFromList(layerList);
+        this.seqNum = seqNum;
+    }
+
     public long createNode(BatchInserter inserter) {
         if (id != -1) {
             return id;

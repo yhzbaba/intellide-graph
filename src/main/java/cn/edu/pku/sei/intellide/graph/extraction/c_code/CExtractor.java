@@ -29,6 +29,7 @@ public class CExtractor extends KnowledgeExtractor {
     public static final RelationshipType include = RelationshipType.withName("include");
     public static final RelationshipType member_of = RelationshipType.withName("member_of");
     public static final RelationshipType invoke = RelationshipType.withName("invoke");
+    public static final RelationshipType has_imp = RelationshipType.withName("has_imp");
     public static final String NAME = "name";
     public static final String FILENAME = "fileName";
     public static final String FULLNAME = "fullName";

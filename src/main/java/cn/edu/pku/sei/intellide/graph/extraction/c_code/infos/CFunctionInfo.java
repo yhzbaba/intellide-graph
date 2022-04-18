@@ -102,6 +102,16 @@ public class CFunctionInfo {
         }
     }
 
+    public void buildImpInvoke(String invokePoint, NumedStatement numedStatement) {
+        CImplicitInvokePoint point = new CImplicitInvokePoint(invokePoint,
+                numedStatement.getLayer(),
+                numedStatement.getSeqNum());
+        if (inserter != null) {
+            long pointId = point.createNode(inserter);
+            inserter.createRelationship(getId(), pointId, CExtractor.has_imp, new HashMap<>());
+        }
+    }
+
     public void processImplicitInvoke() {
         System.out.println("****************" + name + "*****************");
         if (!isDefine) {
@@ -139,8 +149,7 @@ public class CFunctionInfo {
                                 }
                                 if (tempDeclareResult.equals(tempInvokePoint)) {
                                     // 用函数名匹配到变量定义了，那么持久化这个隐式调用点
-                                    System.out.println(tempDeclareResult + " " + tempInvokePoint);
-
+                                    buildImpInvoke(invokePoint, numedStatement);
                                     break;
                                 }
                             }
@@ -148,6 +157,31 @@ public class CFunctionInfo {
                         if (j == 0) {
                             // 到这检查完函数的第一句话了，没有，那么就检查全局指针
                             // 匹配到了，那么持久化这个隐式调用点
+                            if (invokePoint.startsWith("*")) {
+                                // (*fun)();
+                                CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
+                                if (info != null) {
+                                    buildImpInvoke(invokePoint, numedStatement);
+                                } else {
+                                    String temp = invokePoint.substring(1);
+                                    info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
+                                    if (info != null) {
+                                        buildImpInvoke(invokePoint, numedStatement);
+                                    }
+                                }
+                            } else {
+                                // fun();
+                                CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
+                                if (info != null) {
+                                    buildImpInvoke(invokePoint, numedStatement);
+                                } else {
+                                    String temp = "*" + invokePoint;
+                                    info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
+                                    if (info != null) {
+                                        buildImpInvoke(invokePoint, numedStatement);
+                                    }
+                                }
+                            }
                             break;
                         }
                     }

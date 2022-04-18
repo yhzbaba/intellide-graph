@@ -93,4 +93,32 @@ public class FunctionPointerUtil {
         }
         return "";
     }
+
+    /**
+     * 接收一个一个variableName，和本文件文件名，
+     * 本文件有，直接返回，不管有没有初始化
+     * 本文件没有，优先找一遍看有没有已初始化的，否则再找一遍看有没有没初始化的
+     */
+    public static CVariableInfo isIncludeVariable(String variableName, String belongTo) {
+        for (CVariableInfo info : FUNCTION_POINTER_HASH_LIST[hashFunctionPointer(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                if (info.getBelongTo().equals(belongTo)) {
+                    return info;
+                }
+            }
+        }
+        for (CVariableInfo info : FUNCTION_POINTER_HASH_LIST[hashFunctionPointer(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                if (info.getEqualsInitializer() != null) {
+                    return info;
+                }
+            }
+        }
+        for (CVariableInfo info : FUNCTION_POINTER_HASH_LIST[hashFunctionPointer(variableName)]) {
+            if (info.getName().equals(variableName)) {
+                return info;
+            }
+        }
+        return VariableUtil.isIncludeVariable(variableName, belongTo);
+    }
 }

@@ -218,6 +218,9 @@ public class CCodeFileInfo {
                             variableInfo.setSpecifier(simpleDeclSpecifier);
                             variableInfo.setSimpleDeclaration(simpleDeclaration);
                             String variableName = declarator.getName().toString();
+                            if (declarator.getInitializer() != null) {
+                                variableInfo.setEqualsInitializer(declarator.getInitializer());
+                            }
                             variableInfo.setName(variableName);
                             variableInfo.setBelongTo(fileName);
                             // typedef long long ll;
@@ -244,6 +247,9 @@ public class CCodeFileInfo {
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
                         variableName = declarator.getName().toString();
                         variableInfo.setName(variableName);
+                        if (declarator.getInitializer() != null) {
+                            variableInfo.setEqualsInitializer(declarator.getInitializer());
+                        }
                     }
                     variableInfo.setContent(declaration.getRawSignature());
                     variableInfo.setIsStructVariable(true);
@@ -288,6 +294,9 @@ public class CCodeFileInfo {
                             for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
                                 variableName = declarator.getName().toString();
                                 variableInfo.setName(variableName);
+                                if (declarator.getInitializer() != null) {
+                                    variableInfo.setEqualsInitializer(declarator.getInitializer());
+                                }
                             }
                             variableInfo.setContent(declaration.getRawSignature());
                             variableInfo.setIsStructVariable(true);
