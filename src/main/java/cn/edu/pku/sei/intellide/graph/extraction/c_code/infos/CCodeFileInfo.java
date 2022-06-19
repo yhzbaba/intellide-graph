@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CHandleASTProcess;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
@@ -9,8 +10,6 @@ import lombok.Getter;
 import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
-import org.eclipse.cdt.internal.core.dom.parser.c.CASTDeclarator;
-import org.eclipse.cdt.internal.core.dom.parser.c.CASTFunctionDeclarator;
 import org.eclipse.cdt.internal.core.dom.parser.c.CASTParameterDeclaration;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
@@ -64,10 +63,7 @@ public class CCodeFileInfo {
         this.tailFileName = tailFileName;
         this.unit = unit;
         this.inserter = inserter;
-        this.initFunctions();
-        this.initDataStructures();
-        this.initVariables();
-        this.initIncludeCodeFiles();
+        CHandleASTProcess.initSingleAST(this);
         if (inserter != null) {
             this.createNode();
         }

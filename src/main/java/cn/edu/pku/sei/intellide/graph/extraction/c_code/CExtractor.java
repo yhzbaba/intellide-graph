@@ -6,7 +6,10 @@ import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CProjectInfo;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CVariableInfo;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CBaseStoreProcess;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CHandleASTProcess;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CInitProcess;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CInvokeStoreProcess;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.relationships.CInvokeRelation;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
@@ -62,38 +65,19 @@ public class CExtractor extends KnowledgeExtractor {
     @Override
     public void extraction() {
         CProjectInfo projectInfo = new CProjectInfo();
+        BatchInserter inserter = this.getInserter();
 
         CInitProcess.init();
 
-        BatchInserter inserter = this.getInserter();
         try {
             // 完成创建节点的工作
-            projectInfo.makeTranslationUnits(this.getDataDir(), inserter);
+            CHandleASTProcess.handleAST(projectInfo, this.getDataDir(), inserter);
 
-            // 创建节点之间的关系
-            projectInfo.getCodeFileInfoMap().values().forEach(cCodeFileInfo -> {
-                // 处理单个文件
-                cCodeFileInfo.getIncludeCodeFileList().forEach(key -> {
-                    if (projectInfo.getCodeFileInfoMap().containsKey(key)) {
-                        inserter.createRelationship(cCodeFileInfo.getId(), projectInfo.getCodeFileInfoMap().get(key).getId(), CExtractor.include, new HashMap<>());
-                    }
-                });
-                cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
-                    inserter.createRelationship(cCodeFileInfo.getId(), cFunctionInfo.getId(), CExtractor.define, new HashMap<>());
-                });
+            // 创建节点之间的关系-base
+            CBaseStoreProcess.baseStoreProcess(projectInfo, inserter);
 
-                cCodeFileInfo.getDataStructureList().forEach(cDataStructureInfo -> {
-                    inserter.createRelationship(cCodeFileInfo.getId(), cDataStructureInfo.getId(), CExtractor.define, new HashMap<>());
-                    cDataStructureInfo.getFieldInfoList().forEach(cFieldInfo -> {
-                        inserter.createRelationship(cFieldInfo.getId(), cDataStructureInfo.getId(), CExtractor.member_of, new HashMap<>());
-                    });
-                });
-                cCodeFileInfo.getVariableInfoList().forEach(cVariableInfo -> {
-                    inserter.createRelationship(cCodeFileInfo.getId(), cVariableInfo.getId(), CExtractor.define, new HashMap<>());
-                });
-            });
             // 处理函数调用关系
-            CInvokeRelation.createInvokeRelations(projectInfo, inserter);
+            CInvokeStoreProcess.invokeStoreProcess(projectInfo, inserter);
 
         } catch (IOException | CoreException e) {
             e.printStackTrace();
