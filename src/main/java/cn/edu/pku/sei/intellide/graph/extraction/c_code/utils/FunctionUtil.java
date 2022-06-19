@@ -14,6 +14,12 @@ public class FunctionUtil {
 
     public static List<CFunctionInfo>[] FUNCTION_HASH_LIST = new ArrayList[SIZE_OF_FUNCTION_HASH_SET];
 
+    public static void init() {
+        for (int i = 0; i < FunctionUtil.SIZE_OF_FUNCTION_HASH_SET; i++) {
+            FunctionUtil.FUNCTION_HASH_LIST[i] = new ArrayList<>();
+        }
+    }
+
     /**
      * 同时考虑了fun1() book.fun1() bookPtr->fun1() printf(fun1())
      *

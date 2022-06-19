@@ -12,6 +12,12 @@ public class VariableUtil {
 
     public static List<CVariableInfo>[] VARIABLE_HASH_LIST = new ArrayList[SIZE_OF_VARIABLE_HASH_SET];
 
+    public static void init() {
+        for (int i = 0; i < VariableUtil.SIZE_OF_VARIABLE_HASH_SET; i++) {
+            VariableUtil.VARIABLE_HASH_LIST[i] = new ArrayList<>();
+        }
+    }
+
     public static List<String> getVariableNameFromReturnStatement(IASTReturnStatement statement) {
         List<String> result = new ArrayList<>();
         for (IASTNode node : statement.getChildren()) {

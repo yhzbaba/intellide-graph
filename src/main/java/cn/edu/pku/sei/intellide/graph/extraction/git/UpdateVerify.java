@@ -3,6 +3,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.git;
 import cn.edu.pku.sei.intellide.graph.extraction.KnowledgeExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.relationships.CInvokeRelation;
 import org.eclipse.core.runtime.CoreException;
 import org.neo4j.graphdb.*;
 
@@ -12,7 +13,7 @@ import java.util.*;
 import static org.neo4j.graphdb.Direction.INCOMING;
 import static org.neo4j.graphdb.Direction.OUTGOING;
 
-public class UpdateVerify extends KnowledgeExtractor  {
+public class UpdateVerify extends KnowledgeExtractor {
 
     @Override
     public void extraction() {
@@ -21,7 +22,8 @@ public class UpdateVerify extends KnowledgeExtractor  {
         try {
             dstProjectInfo.makeTranslationUnits(this.getDstCodeDir(), null);
             // 处理函数调用关系
-            CExtractor.createInvokeRelations(dstProjectInfo, null);
+//            CExtractor.createInvokeRelations(dstProjectInfo, null);
+            CInvokeRelation.createInvokeRelations(dstProjectInfo, null);
 
         } catch (IOException | CoreException e) {
             e.printStackTrace();
@@ -30,7 +32,7 @@ public class UpdateVerify extends KnowledgeExtractor  {
         // 访问数据库(graphDir 路径)，获取更新后的项目信息（注意配置 increment 为 true）
         CProjectInfo updateProjectInfo = new CProjectInfo();
         GraphDatabaseService db = this.getDb();
-        try(Transaction tx = db.beginTx()) {
+        try (Transaction tx = db.beginTx()) {
             for (ResourceIterator<Node> it = db.findNodes(CExtractor.c_code_file); it.hasNext(); ) {
                 // 获取代码文件类对象的属性
                 Node codeNode = it.next();
@@ -39,8 +41,8 @@ public class UpdateVerify extends KnowledgeExtractor  {
 
                 // includeCodeFileList
                 List<String> includeCodeFileList = new ArrayList<>();
-                if(codeNode.hasRelationship(CExtractor.include)) {
-                    for(Relationship rel: codeNode.getRelationships(CExtractor.include, OUTGOING)) {
+                if (codeNode.hasRelationship(CExtractor.include)) {
+                    for (Relationship rel : codeNode.getRelationships(CExtractor.include, OUTGOING)) {
                         Node dstNode = rel.getEndNode();
                         includeCodeFileList.add((String) dstNode.getProperty("tailFileName"));
                     }
@@ -50,10 +52,10 @@ public class UpdateVerify extends KnowledgeExtractor  {
                 List<CVariableInfo> variableInfoList = new ArrayList<>();
                 List<CDataStructureInfo> dataStructureList = new ArrayList<>();
                 List<CFunctionInfo> functionInfoList = new ArrayList<>();
-                if(codeNode.hasRelationship(CExtractor.define)) {
-                    for(Relationship rel: codeNode.getRelationships(CExtractor.define, OUTGOING)) {
+                if (codeNode.hasRelationship(CExtractor.define)) {
+                    for (Relationship rel : codeNode.getRelationships(CExtractor.define, OUTGOING)) {
                         Node dstNode = rel.getEndNode();
-                        if(dstNode.hasLabel(CExtractor.c_variable)) {
+                        if (dstNode.hasLabel(CExtractor.c_variable)) {
                             // variable
                             CVariableInfo var = new CVariableInfo();
                             var.setName((String) dstNode.getProperty("name"));
@@ -61,15 +63,14 @@ public class UpdateVerify extends KnowledgeExtractor  {
                             var.setIsDefine((Boolean) dstNode.getProperty("isDefine"));
                             var.setIsStructVariable((Boolean) dstNode.getProperty("isStructVariable"));
                             variableInfoList.add(var);
-                        }
-                        else if(dstNode.hasLabel(CExtractor.c_struct)) {
+                        } else if (dstNode.hasLabel(CExtractor.c_struct)) {
                             // struct
                             CDataStructureInfo struct = new CDataStructureInfo();
                             struct.setName((String) dstNode.getProperty("name"));
                             struct.setTypedefName((String) dstNode.getProperty("typedefName"));
                             struct.setIsEnum((Boolean) dstNode.getProperty("isEnum"));
-                            if(dstNode.hasRelationship(CExtractor.member_of)) {
-                                for(Relationship r: dstNode.getRelationships(CExtractor.member_of, INCOMING)) {
+                            if (dstNode.hasRelationship(CExtractor.member_of)) {
+                                for (Relationship r : dstNode.getRelationships(CExtractor.member_of, INCOMING)) {
                                     // struct field
                                     // TODO: 当前处理还没有考虑普通的域成员，后续再补充
                                     Node srcNode = r.getStartNode();
@@ -77,8 +78,7 @@ public class UpdateVerify extends KnowledgeExtractor  {
                                 }
                             }
                             dataStructureList.add(struct);
-                        }
-                        else if(dstNode.hasLabel(CExtractor.c_function)) {
+                        } else if (dstNode.hasLabel(CExtractor.c_function)) {
                             // function
                             CFunctionInfo func = new CFunctionInfo();
                             func.setName((String) dstNode.getProperty("name"));
@@ -90,8 +90,8 @@ public class UpdateVerify extends KnowledgeExtractor  {
                             func.setIsDefine((Boolean) dstNode.getProperty("isDefine"));
 //                            func.setFullParams((List<String>) dstNode.getProperty("fullParams"));
                             List<String> callFunctionNameList = new ArrayList<>();
-                            if(dstNode.hasRelationship(CExtractor.invoke)) {
-                                for(Relationship r: dstNode.getRelationships(CExtractor.invoke, OUTGOING)) {
+                            if (dstNode.hasRelationship(CExtractor.invoke)) {
+                                for (Relationship r : dstNode.getRelationships(CExtractor.invoke, OUTGOING)) {
                                     Node endNode = r.getEndNode();
                                     callFunctionNameList.add((String) endNode.getProperty("name"));
                                 }
@@ -113,11 +113,11 @@ public class UpdateVerify extends KnowledgeExtractor  {
 
         // 对比两个 ProjectInfo 中的信息，验证更新后图谱的一致性
         boolean flag = false;
-        for(Map.Entry entry: dstProjectInfo.getCodeFileInfoMap().entrySet()) {
+        for (Map.Entry entry : dstProjectInfo.getCodeFileInfoMap().entrySet()) {
             String fileName = (String) entry.getKey();
             CCodeFileInfo dstCodeFileInfo = (CCodeFileInfo) entry.getValue();
             // 代码文件实体缺失
-            if(!updateProjectInfo.getCodeFileInfoMap().containsKey(fileName)) {
+            if (!updateProjectInfo.getCodeFileInfoMap().containsKey(fileName)) {
                 flag = true;
                 System.out.println("mismatch code file: " + fileName);
             }
@@ -125,60 +125,56 @@ public class UpdateVerify extends KnowledgeExtractor  {
 
             // 遍历 include, variable, struct, function
             dstCodeFileInfo.getIncludeCodeFileList().forEach(includeFile -> {
-                if(!updateCodeFileInfo.getIncludeCodeFileList().contains(includeFile)) {
+                if (!updateCodeFileInfo.getIncludeCodeFileList().contains(includeFile)) {
                     System.out.println("mismatch include file:" + includeFile);
-                }
-                else {
+                } else {
                     updateCodeFileInfo.getIncludeCodeFileList().remove(includeFile);
                 }
             });
-            if(!updateCodeFileInfo.getIncludeCodeFileList().isEmpty()) {
+            if (!updateCodeFileInfo.getIncludeCodeFileList().isEmpty()) {
                 flag = true;
             }
 
             dstCodeFileInfo.getVariableInfoList().forEach(var -> {
-                if(!updateCodeFileInfo.getVariableInfoList().contains(var)) {
+                if (!updateCodeFileInfo.getVariableInfoList().contains(var)) {
                     System.out.println("mismatch variable: " + var.getName());
-                }
-                else {
+                } else {
                     updateCodeFileInfo.getVariableInfoList().remove(var);
                 }
             });
-            if(!updateCodeFileInfo.getVariableInfoList().isEmpty()) {
+            if (!updateCodeFileInfo.getVariableInfoList().isEmpty()) {
                 flag = true;
             }
 
             dstCodeFileInfo.getDataStructureList().forEach(ds -> {
-                if(!updateCodeFileInfo.getDataStructureList().contains(ds)) {
+                if (!updateCodeFileInfo.getDataStructureList().contains(ds)) {
                     System.out.println("mismatch struct: " + ds.getName());
-                }
-                else {
+                } else {
                     updateCodeFileInfo.getDataStructureList().remove(ds);
                 }
             });
-            if(!updateCodeFileInfo.getDataStructureList().isEmpty()) {
+            if (!updateCodeFileInfo.getDataStructureList().isEmpty()) {
                 flag = true;
             }
 
             dstCodeFileInfo.getFunctionInfoList().forEach(func -> {
-                if(!updateCodeFileInfo.getFunctionInfoList().contains(func)) {
+                if (!updateCodeFileInfo.getFunctionInfoList().contains(func)) {
                     System.out.println("mismatch function:" + func.getName());
-                }
-                else {
+                } else {
                     updateCodeFileInfo.getFunctionInfoList().remove(func);
                 }
             });
-            if(!updateCodeFileInfo.getFunctionInfoList().isEmpty()) {
+            if (!updateCodeFileInfo.getFunctionInfoList().isEmpty()) {
                 flag = true;
             }
 
             updateProjectInfo.getCodeFileInfoMap().remove(fileName);
         }
 
-        if(!updateProjectInfo.getCodeFileInfoMap().isEmpty()) {
+        if (!updateProjectInfo.getCodeFileInfoMap().isEmpty()) {
             flag = true;
         }
-        if(!flag) {
+        if (!flag) {
             System.out.println("Update Verification Passed");
         }
     }

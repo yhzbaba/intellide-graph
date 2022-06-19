@@ -15,6 +15,12 @@ public class FunctionPointerUtil {
 
     public static List<CVariableInfo>[] FUNCTION_POINTER_HASH_LIST = new ArrayList[SIZE_OF_FUNCTION_POINTER_HASH_SET];
 
+    public static void init() {
+        for (int i = 0; i < SIZE_OF_FUNCTION_POINTER_HASH_SET; i++) {
+            FUNCTION_POINTER_HASH_LIST[i] = new ArrayList<>();
+        }
+    }
+
     public static int hashFunctionPointer(String key) {
         return ASTUtil.hashCode(key, SIZE_OF_FUNCTION_POINTER_HASH_SET);
     }
