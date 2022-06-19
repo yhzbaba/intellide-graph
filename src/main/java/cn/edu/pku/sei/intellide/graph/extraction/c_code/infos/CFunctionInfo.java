@@ -104,6 +104,14 @@ public class CFunctionInfo {
         }
     }
 
+    /**
+     * 1、根据调用点标识符以及这句话的作用域信息，构造一个 CImplicitInvokePoint 类型的隐式调用结点
+     * 2、构建函数拥有（has_imp）该结点的关系
+     *
+     * @param invokePoint    调用点的标识符
+     * @param numedStatement 调用域所在的作用域信息
+     * @return 返回这么一个隐式调用结点
+     */
     public CImplicitInvokePoint buildImpInvoke(String invokePoint, NumedStatement numedStatement) {
         CImplicitInvokePoint point = new CImplicitInvokePoint(invokePoint,
                 numedStatement.getLayer(),
@@ -133,7 +141,35 @@ public class CFunctionInfo {
                 // 如果找不到找全局(2)
                 // 再找不到说明显式调用，交给下一步去做就行了
                 // 找定义点的时候只检查本块 + 上层，本层其他块不检查
+                // 这个循环是这句话的所有invokePoint
                 for (String invokePoint : invokePoints) {
+                    if (i == 0) {
+                        CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
+                        if (invokePoint.startsWith("*")) {
+                            // (*fun)();
+                            if (info != null) {
+                                buildAndInvoke(numedStatement, invokePoint, info);
+                            } else {
+                                String temp = invokePoint.substring(1);
+                                info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
+                                if (info != null) {
+                                    buildAndInvoke(numedStatement, invokePoint, info);
+                                }
+                            }
+                        } else {
+                            // fun();
+                            if (info != null) {
+                                buildAndInvoke(numedStatement, invokePoint, info);
+                            } else {
+                                String temp = "*" + invokePoint;
+                                info = FunctionPointerUtil.isIncludeVariable(temp, belongTo);
+                                if (info != null) {
+                                    buildAndInvoke(numedStatement, invokePoint, info);
+                                }
+                            }
+                        }
+                        break;
+                    }
                     for (int j = i - 1; j >= 0; j--) {
                         NumedStatement numedCheckDeclare = statementList.get(j);
                         if ((numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
@@ -164,9 +200,9 @@ public class CFunctionInfo {
                         if (j == 0) {
                             // 到这检查完函数的第一句话了，没有，那么就检查全局指针
                             // 匹配到了，那么持久化这个隐式调用点
+                            CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                             if (invokePoint.startsWith("*")) {
                                 // (*fun)();
-                                CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                                 if (info != null) {
                                     buildAndInvoke(numedStatement, invokePoint, info);
                                 } else {
@@ -178,7 +214,6 @@ public class CFunctionInfo {
                                 }
                             } else {
                                 // fun();
-                                CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                                 if (info != null) {
                                     buildAndInvoke(numedStatement, invokePoint, info);
                                 } else {
