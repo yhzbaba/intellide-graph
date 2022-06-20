@@ -2,10 +2,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CHandleASTProcess;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
@@ -166,21 +163,18 @@ public class CCodeFileInfo {
                 if (declSpecifier instanceof IASTSimpleDeclSpecifier) {
                     for (IASTDeclarator declarator : simpleDeclaration.getDeclarators()) {
                         if (declarator instanceof IASTFunctionDeclarator) {
+                            if (declSpecifier.getRawSignature().startsWith("typedef")) {
+                                // 定义的是typedef函数指针类型
+                                PrimitiveMapUtil.insert(declarator.getName().toString(), new PrimitiveClass("", true, fileName, declSpecifier.getRawSignature().split(" ")[1]));
+                            }
                             // (*fun)() common_fun() (*fun)() = &PFB_2
                             if (!"".equals(declarator.getName().toString())) {
                                 //common_fun()
-                                CFunctionInfo functionInfo = new CFunctionInfo();
-                                functionInfo.setFunctionDefinition(null);
-                                functionInfo.setBelongTo(fileName);
-                                functionInfo.setName(declarator.getName().toString());
-                                functionInfo.setFullName(simpleDeclaration.getRawSignature());
-                                functionInfo.setBelongToName(fileName + declarator.getName().toString());
-                                functionInfo.setIsInline(false);
-                                functionInfo.setIsDefine(true);
+                                CFunctionInfo functionInfo;
                                 if (declSpecifier.getRawSignature().contains("const")) {
-                                    functionInfo.setIsConst(true);
+                                    functionInfo = new CFunctionInfo(declarator.getName().toString(), simpleDeclaration.getRawSignature(), fileName + declarator.getName().toString(), false, true, true, fileName + declarator.getName().toString(), null);
                                 } else {
-                                    functionInfo.setIsConst(false);
+                                    functionInfo = new CFunctionInfo(declarator.getName().toString(), simpleDeclaration.getRawSignature(), fileName + declarator.getName().toString(), false, false, true, fileName + declarator.getName().toString(), null);
                                 }
                                 if (this.inserter != null) {
                                     functionInfo.createNode(inserter);
@@ -306,7 +300,6 @@ public class CCodeFileInfo {
                 }
             }
         }
-//        deDuplication(variableInfoList);
     }
 
     public void initIncludeCodeFiles() {

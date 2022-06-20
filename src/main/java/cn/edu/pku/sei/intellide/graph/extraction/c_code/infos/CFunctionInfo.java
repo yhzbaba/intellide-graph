@@ -3,6 +3,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.PrimitiveMapUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Data;
 import lombok.Getter;
@@ -88,6 +89,20 @@ public class CFunctionInfo {
      */
     private int numOfStatements = 0;
 
+    public CFunctionInfo() {
+    }
+
+    public CFunctionInfo(String name, String fullName, String belongTo, Boolean isInline, Boolean isConst, Boolean isDefine, String belongToName, IASTFunctionDefinition functionDefinition) {
+        this.name = name;
+        this.fullName = fullName;
+        this.belongTo = belongTo;
+        this.isInline = isInline;
+        this.isConst = isConst;
+        this.isDefine = isDefine;
+        this.belongToName = belongToName;
+        this.functionDefinition = functionDefinition;
+    }
+
     /**
      * 初始化语句列表
      */
@@ -124,6 +139,10 @@ public class CFunctionInfo {
     }
 
     public void processImplicitInvoke() {
+        PrimitiveClass primitiveClass = PrimitiveMapUtil.query("IOHandler");
+        if (primitiveClass != null) {
+            System.out.println(primitiveClass);
+        }
         if (!isDefine) {
             for (int i = numOfStatements - 1; i >= 0; i--) {
                 // 先从后往前检查每个小句子，得到可能的隐式调用点
@@ -170,6 +189,7 @@ public class CFunctionInfo {
                         }
                         break;
                     }
+
                     for (int j = i - 1; j >= 0; j--) {
                         NumedStatement numedCheckDeclare = statementList.get(j);
                         if ((numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
