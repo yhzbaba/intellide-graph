@@ -1,9 +1,6 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CCodeFileInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CVariableInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.NumedStatement;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
@@ -99,10 +96,16 @@ public class FunctionPointerUtil {
         IASTDeclaration declaration = statement.getDeclaration();
         if (declaration instanceof IASTSimpleDeclaration) {
             for (IASTDeclarator declarator : ((IASTSimpleDeclaration) declaration).getDeclarators()) {
-                if (declarator.getNestedDeclarator() != null) {
-                    return declarator.getNestedDeclarator().getRawSignature();
-                } else {
-                    return declarator.getName().toString();
+                String classSpecifier = ((IASTSimpleDeclaration) declaration).getDeclSpecifier().getRawSignature();
+                PrimitiveClass queryResult = PrimitiveMapUtil.query(classSpecifier);
+                if (queryResult != null) {
+                    if (PrimitiveMapUtil.query(classSpecifier).getIsFunPointer() || declarator instanceof IASTFunctionDeclarator) {
+                        if (declarator.getNestedDeclarator() != null) {
+                            return declarator.getNestedDeclarator().getRawSignature();
+                        } else {
+                            return declarator.getName().toString();
+                        }
+                    }
                 }
             }
         }
@@ -218,5 +221,17 @@ public class FunctionPointerUtil {
             }
         }
         return result;
+    }
+
+    /**
+     * 返回一个布尔值，参数2是否是在参数1这条语句上面的语句，包括同级、下级、上级
+     *
+     * @param numedStatement
+     * @param numedCheckDeclare
+     * @return
+     */
+    public static Boolean isSameOrUpOrDownStat(NumedStatement numedStatement, NumedStatement numedCheckDeclare) {
+        return (numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
+                || numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size();
     }
 }

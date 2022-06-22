@@ -10,6 +10,13 @@ public class PrimitiveMapUtil {
 
     public static void init() {
         primitiveClassMap = new HashMap<>();
+        insert("void", new PrimitiveClass());
+        insert("int", new PrimitiveClass());
+        insert("float", new PrimitiveClass());
+        insert("double", new PrimitiveClass());
+        insert("char", new PrimitiveClass());
+        insert("long", new PrimitiveClass());
+        insert("short", new PrimitiveClass());
     }
 
     public static void insert(String typedefName, PrimitiveClass primitiveClass) {

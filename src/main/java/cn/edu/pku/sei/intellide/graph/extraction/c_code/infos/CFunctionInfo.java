@@ -140,9 +140,6 @@ public class CFunctionInfo {
 
     public void processImplicitInvoke() {
         PrimitiveClass primitiveClass = PrimitiveMapUtil.query("IOHandler");
-        if (primitiveClass != null) {
-            System.out.println(primitiveClass);
-        }
         if (!isDefine) {
             for (int i = numOfStatements - 1; i >= 0; i--) {
                 // 先从后往前检查每个小句子，得到可能的隐式调用点
@@ -163,6 +160,7 @@ public class CFunctionInfo {
                 // 这个循环是这句话的所有invokePoint
                 for (String invokePoint : invokePoints) {
                     if (i == 0) {
+                        // 大循环找到头了，就开始构建
                         CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                         if (invokePoint.startsWith("*")) {
                             // (*fun)();
@@ -190,10 +188,10 @@ public class CFunctionInfo {
                         break;
                     }
 
+                    // 从这往前找
                     for (int j = i - 1; j >= 0; j--) {
                         NumedStatement numedCheckDeclare = statementList.get(j);
-                        if ((numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
-                                || numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size()) {
+                        if (FunctionPointerUtil.isSameOrUpOrDownStat(numedStatement, numedCheckDeclare)) {
                             IASTStatement checkDeclare = numedCheckDeclare.getStatement();
                             if (checkDeclare instanceof IASTDeclarationStatement) {
                                 String declareResult = FunctionPointerUtil.getDeclarationLeftName((IASTDeclarationStatement) checkDeclare);
