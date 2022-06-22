@@ -2,6 +2,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.process.CHandleASTProcess;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.*;
 import lombok.Getter;
 import lombok.Setter;

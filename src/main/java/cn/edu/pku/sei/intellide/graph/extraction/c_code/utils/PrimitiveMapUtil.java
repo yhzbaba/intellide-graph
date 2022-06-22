@@ -1,6 +1,6 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.PrimitiveClass;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
 
 import java.util.HashMap;
 import java.util.Map;

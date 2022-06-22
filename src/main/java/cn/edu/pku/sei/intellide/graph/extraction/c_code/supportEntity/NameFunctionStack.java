@@ -1,5 +1,6 @@
-package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
+package cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity;
 
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import lombok.Data;
 
 import java.util.Stack;

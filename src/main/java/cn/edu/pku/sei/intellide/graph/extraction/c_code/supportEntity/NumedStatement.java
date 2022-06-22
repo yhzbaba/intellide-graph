@@ -1,4 +1,4 @@
-package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
+package cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity;
 
 import lombok.Data;
 import org.eclipse.cdt.core.dom.ast.IASTStatement;

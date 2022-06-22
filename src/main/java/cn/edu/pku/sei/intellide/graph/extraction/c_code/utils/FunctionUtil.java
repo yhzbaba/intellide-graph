@@ -1,13 +1,11 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.NumedStatement;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
 
 public class FunctionUtil {
     public static int SIZE_OF_FUNCTION_HASH_SET = 1111113;

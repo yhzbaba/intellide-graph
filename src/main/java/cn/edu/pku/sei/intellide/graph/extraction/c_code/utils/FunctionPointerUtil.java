@@ -1,10 +1,11 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 public class FunctionPointerUtil {
