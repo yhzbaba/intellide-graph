@@ -1,12 +1,11 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.GetProbInvokeListReturnClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NameFunctionStack;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionUtil;
-import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.PrimitiveMapUtil;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Data;
 import lombok.Getter;
@@ -116,9 +115,7 @@ public class CFunctionInfo {
             IASTCompoundStatement compoundStatement = (IASTCompoundStatement) functionDefinition.getBody();
             statementList.addAll(FunctionUtil.getStatementsFromCompound(compoundStatement, startLayer));
             numOfStatements = statementList.size();
-//            for (int i = numOfStatements - 1; i >= 0; i--) {
-//                System.out.println(statementList.get(i));
-//            }
+            FunctionUtil.giveFunctionSeq(statementList);
         }
     }
 
@@ -142,7 +139,6 @@ public class CFunctionInfo {
     }
 
     public void processImplicitInvoke() {
-        PrimitiveClass primitiveClass = PrimitiveMapUtil.query("IOHandler");
         if (!isDefine) {
             for (int i = numOfStatements - 1; i >= 0; i--) {
                 // 先从后往前检查每个小句子，得到可能的隐式调用点
@@ -154,7 +150,8 @@ public class CFunctionInfo {
                 } else if (statement instanceof IASTDeclarationStatement) {
                     invokePoints.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
                 } else if (statement instanceof IASTExpressionStatement) {
-                    invokePoints.addAll(FunctionPointerUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
+                    invokePoints.addAll(FunctionUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
+                    FunctionUtil.getFunctionNameAndArgsFromExpressionStatement((IASTExpressionStatement) statement);
                 }
                 // 这句话的可能隐式调用点拿到了，遍历它们，再从这个位置往前寻找定义点(1)
                 // 如果找不到找全局(2)
@@ -194,26 +191,36 @@ public class CFunctionInfo {
                     // 从这往前找
                     for (int j = i - 1; j >= 0; j--) {
                         NumedStatement numedCheckDeclare = statementList.get(j);
-                        if (FunctionPointerUtil.isSameOrUpOrDownStat(numedStatement, numedCheckDeclare)) {
+                        if (FunctionPointerUtil.isSameOrUpStat(numedStatement, numedCheckDeclare)) {
                             IASTStatement checkDeclare = numedCheckDeclare.getStatement();
                             if (checkDeclare instanceof IASTDeclarationStatement) {
                                 String declareResult = FunctionPointerUtil.getDeclarationLeftName((IASTDeclarationStatement) checkDeclare);
-                                String tempInvokePoint = invokePoint;
-                                String tempDeclareResult = declareResult;
-                                if (!tempInvokePoint.startsWith("*")) {
-                                    tempInvokePoint = "*" + invokePoint;
-                                }
-                                if (!tempDeclareResult.startsWith("*")) {
-                                    tempDeclareResult = "*" + declareResult;
-                                }
+                                String tempInvokePoint = invokePoint.startsWith("*") ? invokePoint : "*" + invokePoint;
+                                String tempDeclareResult = declareResult.startsWith("*") ? declareResult : "*" + declareResult;
                                 if (tempDeclareResult.equals(tempInvokePoint)) {
                                     // 用函数名匹配到变量定义了，那么持久化这个隐式调用点，然后直接检查下一个invokePoint
                                     CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
-                                    List<CFunctionInfo> probInvokeList = getProbInvokeList(numedCheckDeclare, numedStatement, invokePoint);
+                                    // 找到赋值点，我的目的是赋值点后面第一句（将包含invokePoint作为参数的函数）揪出来
+                                    // 然后检查新函数时把（参数序号、已赋值的函数结点）传进去
+                                    // 这个函数获得的是，(赋值点语句及对应被调用函数结点)的一个List
+                                    List<GetProbInvokeListReturnClass> probInvokeAllInfoList = getProbInvokeList(numedCheckDeclare, numedStatement, invokePoint);
+                                    System.out.println(invokePoint);
+                                    System.out.println(probInvokeAllInfoList);
+                                    List<CFunctionInfo> probInvokeList = GetProbInvokeListReturnClass.getAllFunctions(probInvokeAllInfoList);
                                     point.setProbInvokeFunctions(probInvokeList);
                                     point.getProbInvokeFunctions().forEach(invokeFunc -> {
                                         inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
                                     });
+
+                                    // 要带着已知信息去检查新函数了！
+                                    for (GetProbInvokeListReturnClass info : probInvokeAllInfoList) {
+                                        NumedStatement infoNumedStatement = info.getNumedStatement();
+                                        for (int k = infoNumedStatement.getFunSeq() + 1; k < numOfStatements; k++) {
+                                            // 找到一个包含invokePoint为参数的函数调用，然后直接break
+
+                                        }
+                                    }
+
                                     break;
                                 }
                             }
@@ -248,6 +255,12 @@ public class CFunctionInfo {
                             break;
                         }
                     }
+
+
+                    // 从最后挂钩点往后找第一个
+                    for (NumedStatement numedStatement1 : statementList) {
+
+                    }
                 }
             }
         }
@@ -275,24 +288,26 @@ public class CFunctionInfo {
      * 从后往前检查挂钩情况：
      * 同一块，若有检查到就直接停（1）
      * 若（1）中没有，起点终点间整个遍历，有就算（2）
+     * <p>
+     * 算法逻辑：根据定义点位置：
+     * 1、在同一块中，那么就只找同一块语句，找到一个赋值点那就是了，然后直接返回结果
+     * 2、在上面语句中，那么中间所有的赋值点
      *
      * @param startStatement 从哪一句开始检查起
      * @param endStatement   检查到哪句话之前
      * @return 可能的被调用的函数结点
      */
-    public List<CFunctionInfo> getProbInvokeList(
+    public List<GetProbInvokeListReturnClass> getProbInvokeList(
             NumedStatement startStatement,
             NumedStatement endStatement,
             String invokePoint) {
-        List<CFunctionInfo> result = new ArrayList<>();
-        String tempInvokePoint = "";
+        List<GetProbInvokeListReturnClass> result = new ArrayList<>();
         // 让tempInvokePoint确保是*开头
-        if (!invokePoint.startsWith("*")) {
-            tempInvokePoint = "*" + invokePoint;
-        }
+        String tempInvokePoint = invokePoint.startsWith("*") ? invokePoint : "*" + invokePoint;
         // 先检查同一块
         int t1 = 0;
         for (int i = numOfStatements - 1; i >= 0; i--) {
+            // 跳过endStatement到函数结尾之间的语句
             NumedStatement check = statementList.get(i);
             if (!(check.isSameLayer(endStatement) && check.getSeqNum() == endStatement.getSeqNum()) && t1 == 0) {
                 continue;
@@ -300,7 +315,7 @@ public class CFunctionInfo {
                 t1 = 1;
             }
             if (check.isSameLayer(startStatement) && check.getSeqNum() == startStatement.getSeqNum()) {
-                // 说明在同一块检查到declare那句话了
+                // 说明在同一块检查到declare那句话了，那么就不继续找了，注意有break
                 IASTStatement statement = check.getStatement();
                 if (statement instanceof IASTDeclarationStatement) {
                     List<CFunctionInfo> list = FunctionPointerUtil.getInvokeFunctions(
@@ -309,7 +324,7 @@ public class CFunctionInfo {
                             FunctionPointerUtil.getDeclarationRightName((IASTDeclarationStatement) statement)
                     );
                     if (list.size() > 0) {
-                        result.addAll(list);
+                        result.add(new GetProbInvokeListReturnClass(check, list));
                         return result;
                     }
                 }
@@ -326,7 +341,7 @@ public class CFunctionInfo {
                             includeFileList,
                             belongTo);
                     if (list.size() > 0) {
-                        result.addAll(list);
+                        result.add(new GetProbInvokeListReturnClass(check, list));
                         return result;
                     }
                 }
@@ -349,7 +364,7 @@ public class CFunctionInfo {
                             belongTo,
                             FunctionPointerUtil.getDeclarationRightName((IASTDeclarationStatement) statement)
                     );
-                    result.addAll(list);
+                    result.add(new GetProbInvokeListReturnClass(check, list));
                     return result;
                 }
                 break;
@@ -365,7 +380,7 @@ public class CFunctionInfo {
                             belongTo);
                     if (list.size() > 0) {
                         // 第二个循环是有多少就算多少，不用break
-                        result.addAll(list);
+                        result.add(new GetProbInvokeListReturnClass(check, list));
                     }
                 }
             }

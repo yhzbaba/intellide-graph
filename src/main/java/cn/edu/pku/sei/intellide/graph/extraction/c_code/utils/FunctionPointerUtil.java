@@ -3,6 +3,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.StringAndStringList;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
@@ -113,6 +114,10 @@ public class FunctionPointerUtil {
         return "";
     }
 
+    /**
+     * @param statement 一条声明语句
+     * @return 这条声明语句的右值
+     */
     public static String getDeclarationRightName(IASTDeclarationStatement statement) {
         IASTDeclaration declaration = statement.getDeclaration();
         if (declaration instanceof IASTSimpleDeclaration) {
@@ -157,6 +162,12 @@ public class FunctionPointerUtil {
         return VariableUtil.isIncludeVariable(variableName, belongTo);
     }
 
+    /**
+     * @param includeFileList 调用方所在文件的include列表
+     * @param belongTo        调用方所在文件名
+     * @param name            被调用函数的函数名
+     * @return name对应的函数结点
+     */
     public static List<CFunctionInfo> getInvokeFunctions(List<String> includeFileList,
                                                          String belongTo,
                                                          String name) {
@@ -225,13 +236,13 @@ public class FunctionPointerUtil {
     }
 
     /**
-     * 返回一个布尔值，参数2是否是在参数1这条语句上面的语句，包括同级、下级、上级
+     * 返回一个布尔值，参数2是否是在参数1这条语句上面的语句，包括同级、上级
      *
      * @param numedStatement
      * @param numedCheckDeclare
      * @return
      */
-    public static Boolean isSameOrUpOrDownStat(NumedStatement numedStatement, NumedStatement numedCheckDeclare) {
+    public static Boolean isSameOrUpStat(NumedStatement numedStatement, NumedStatement numedCheckDeclare) {
         return (numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
                 || numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size();
     }

@@ -2,6 +2,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.CFunctionInfo;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.StringAndStringList;
 import org.eclipse.cdt.core.dom.ast.*;
 
 import java.util.ArrayList;
@@ -21,8 +22,8 @@ public class FunctionUtil {
     /**
      * 同时考虑了fun1() book.fun1() bookPtr->fun1() printf(fun1())
      *
-     * @param expression
-     * @return
+     * @param expression 函数调用那个表达式
+     * @return 表达式中递归出现的函数名以及参数名
      */
     public static List<String> getFunctionNameFromFunctionCallExpression(IASTFunctionCallExpression expression) {
         List<String> result = new ArrayList<>();
@@ -42,8 +43,57 @@ public class FunctionUtil {
                         result.add(node1.getRawSignature());
                     }
                 }
+            } else if (node instanceof IASTUnaryExpression) {
+                result.addAll(getFunctionNameFromUnaryExpression((IASTUnaryExpression) node));
             }
         }
+        return result;
+    }
+
+    public static List<String> getFunctionNameFromUnaryExpression(IASTUnaryExpression unaryExpression) {
+        List<String> result = new ArrayList<>();
+        result.add(unaryExpression.getOperand().getRawSignature());
+
+        return result;
+    }
+
+    /**
+     * 同时考虑了fun1() book.fun1() bookPtr->fun1() printf(fun1())
+     *
+     * @param expression
+     * @return
+     */
+    public static List<StringAndStringList> getFunctionNameAndArgsFromFunctionCallExpression(IASTFunctionCallExpression expression) {
+        List<StringAndStringList> result = new ArrayList<>();
+        IASTInitializerClause[] arguments = expression.getArguments();
+        // 处理参数
+        for (IASTInitializerClause clause : arguments) {
+            if (clause instanceof IASTFunctionCallExpression) {
+                result.addAll(getFunctionNameAndArgsFromFunctionCallExpression((IASTFunctionCallExpression) clause));
+            }
+        }
+        int k = 0;
+        String functionName = "";
+        List<String> args = new ArrayList<>();
+        for (IASTNode node : expression.getChildren()) {
+            if (node instanceof IASTIdExpression) {
+                if (k == 0) {
+                    functionName = node.getRawSignature();
+                    k = 1;
+                    continue;
+                }
+                args.add(node.getRawSignature());
+            } else if (node instanceof IASTFieldReference) {
+                for (IASTNode node1 : node.getChildren()) {
+                    if (node1 instanceof IASTName) {
+                        args.add(node1.getRawSignature());
+                    }
+                }
+            } else if (node instanceof IASTUnaryExpression) {
+                args.addAll(getFunctionNameFromUnaryExpression((IASTUnaryExpression) node));
+            }
+        }
+        result.add(new StringAndStringList(functionName, args));
         return result;
     }
 
@@ -52,6 +102,17 @@ public class FunctionUtil {
         for (IASTNode node : binaryExpression.getChildren()) {
             if (node instanceof IASTFunctionCallExpression) {
                 nameResult.addAll(getFunctionNameFromFunctionCallExpression((IASTFunctionCallExpression) node));
+            }
+        }
+
+        return nameResult;
+    }
+
+    public static List<StringAndStringList> getFunctionNameAndArgsFromBinaryExpression(IASTBinaryExpression binaryExpression) {
+        List<StringAndStringList> nameResult = new ArrayList<>();
+        for (IASTNode node : binaryExpression.getChildren()) {
+            if (node instanceof IASTFunctionCallExpression) {
+                nameResult.addAll(getFunctionNameAndArgsFromFunctionCallExpression((IASTFunctionCallExpression) node));
             }
         }
 
@@ -73,6 +134,21 @@ public class FunctionUtil {
         return result;
     }
 
+    public static List<StringAndStringList> getFunctionNameAndArgsFromExpressionStatement(IASTExpressionStatement statement) {
+        List<StringAndStringList> result = new ArrayList<>();
+        for (IASTNode node : statement.getChildren()) {
+            if (node instanceof IASTFunctionCallExpression) {
+                IASTFunctionCallExpression functionCallExpression = (IASTFunctionCallExpression) node;
+                // 直接的函数调用语句
+                // 获取函数名
+                return getFunctionNameAndArgsFromFunctionCallExpression(functionCallExpression);
+            } else if (node instanceof IASTBinaryExpression) {
+                return getFunctionNameAndArgsFromBinaryExpression((IASTBinaryExpression) node);
+            }
+        }
+        return result;
+    }
+
     public static List<String> getFunctionNameFromReturnStatement(IASTReturnStatement statement) {
         List<String> result = new ArrayList<>();
         for (IASTNode node : statement.getChildren()) {
@@ -82,6 +158,19 @@ public class FunctionUtil {
             } else if (node instanceof IASTBinaryExpression) {
                 List<String> tResult = getFunctionNameFromBinaryExpression((IASTBinaryExpression) node);
                 result.addAll(tResult);
+            }
+        }
+        return result;
+    }
+
+    public static List<StringAndStringList> getFunctionNameAndArgsFromReturnStatement(IASTReturnStatement statement) {
+        List<StringAndStringList> result = new ArrayList<>();
+        for (IASTNode node : statement.getChildren()) {
+            if (node instanceof IASTFunctionCallExpression) {
+                // 直接的函数调用语句
+                result.addAll(getFunctionNameAndArgsFromFunctionCallExpression((IASTFunctionCallExpression) node));
+            } else if (node instanceof IASTBinaryExpression) {
+                result.addAll(getFunctionNameAndArgsFromBinaryExpression((IASTBinaryExpression) node));
             }
         }
         return result;
@@ -97,6 +186,28 @@ public class FunctionUtil {
                             for (IASTNode node3 : node2.getChildren()) {
                                 if (node3 instanceof IASTFunctionCallExpression) {
                                     result.addAll(getFunctionNameFromFunctionCallExpression((IASTFunctionCallExpression) node3));
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    public static List<StringAndStringList> getFunctionNameAndArgsFromDeclarationStatement(IASTDeclarationStatement statement) {
+        List<StringAndStringList> result = new ArrayList<>();
+        for (IASTNode node : statement.getChildren()) {
+            for (IASTNode node1 : node.getChildren()) {
+                if (node1 instanceof IASTDeclarator) {
+                    for (IASTNode node2 : node1.getChildren()) {
+                        if (node2 instanceof IASTEqualsInitializer) {
+                            for (IASTNode node3 : node2.getChildren()) {
+                                if (node3 instanceof IASTFunctionCallExpression) {
+                                    result.addAll(getFunctionNameAndArgsFromFunctionCallExpression((IASTFunctionCallExpression) node3));
                                 }
                             }
                             break;
@@ -210,6 +321,12 @@ public class FunctionUtil {
         }
 
         return result;
+    }
+
+    public static void giveFunctionSeq(List<NumedStatement> numedStatements) {
+        for (int i = 0; i < numedStatements.size(); i++) {
+            numedStatements.get(i).setFunSeq(i);
+        }
     }
 
     /**

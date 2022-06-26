@@ -8,6 +8,12 @@ import java.util.List;
 
 @Data
 public class NumedStatement {
+
+    /**
+     * 在函数内的序号
+     */
+    private Integer funSeq;
+
     /**
      * 一个函数中，这条语句处于第几层的第几个块
      * 比如说第一层第二个块，就是1,2,-1,-1用来标识结尾
