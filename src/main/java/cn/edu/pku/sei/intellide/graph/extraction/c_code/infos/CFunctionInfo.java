@@ -2,6 +2,7 @@ package cn.edu.pku.sei.intellide.graph.extraction.c_code.infos;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.GetProbInvokeListReturnClass;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.IsArgOfFunctionReturnClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NameFunctionStack;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.FunctionPointerUtil;
@@ -138,6 +139,72 @@ public class CFunctionInfo {
         return point;
     }
 
+    /**
+     * 大体逻辑：
+     * 找到第一次赋值点，在这之前，如果有调用就构造imp_invoke与has_imp，如果有作为参数传走就递归
+     *
+     * @param index
+     * @param list
+     * @param originFunction 原始调用方的函数结点
+     * @param k              原始调用方哪句话调用了自己
+     */
+    public void updateImplicitInvoke(int index, List<CFunctionInfo> list, CFunctionInfo originFunction, int k) {
+        String invokePointUnStar = fullParams.get(index).split(" ")[1];
+        if (invokePointUnStar.startsWith("*")) {
+            invokePointUnStar = invokePointUnStar.substring(1);
+        }
+        String invokePoint = invokePointUnStar.startsWith("*") ? invokePointUnStar : "*" + invokePointUnStar;
+        int lastCheckNum = numOfStatements - 1;
+        for (int i = 0; i < numOfStatements; i++) {
+            NumedStatement numedStatement = statementList.get(i);
+            IASTStatement statement = numedStatement.getStatement();
+            if (statement instanceof IASTExpressionStatement) {
+                for (IASTNode node : statement.getChildren()) {
+                    if (node instanceof IASTBinaryExpression) {
+                        IASTBinaryExpression binaryNode = (IASTBinaryExpression) node;
+                        if (binaryNode.getOperator() == 17) {
+                            // 17说明是赋值语句
+                            String operand1 = binaryNode.getOperand1().getRawSignature();
+                            operand1 = operand1.startsWith("*") ? operand1 : "*" + operand1;
+                            if (operand1.equals(invokePoint)) {
+                                lastCheckNum = i;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // 第二个循环，寻找invokePoint是否成为了新函数的调用点，构建has_imp与imp_invoke的关系
+        for (int j = 0; j < lastCheckNum; j++) {
+            NumedStatement numedStatement = statementList.get(j);
+            IASTStatement statement = numedStatement.getStatement();
+            List<String> invokePoints = new ArrayList<>();
+            if (statement instanceof IASTReturnStatement) {
+                invokePoints.addAll(FunctionUtil.getFunctionNameFromReturnStatement((IASTReturnStatement) statement));
+            } else if (statement instanceof IASTDeclarationStatement) {
+                invokePoints.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
+            } else if (statement instanceof IASTExpressionStatement) {
+                invokePoints.addAll(FunctionUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
+            }
+            for (String singleInvokePoint : invokePoints) {
+                if (singleInvokePoint.equals(invokePointUnStar)) {
+                    buildAndInvokeFromKnown(numedStatement, singleInvokePoint, list, originFunction, k, index);
+                }
+            }
+        }
+        // 第三个循环，看看这个invokePoint在重新赋值之前有没有作为参数去其他的函数，若有，递归更新
+        for (int kk = 0; kk < lastCheckNum; kk++) {
+            // 找到一个包含invokePoint为参数的函数调用，然后直接break
+            IASTStatement statement1 = statementList.get(kk).getStatement();
+            IsArgOfFunctionReturnClass returnClass = FunctionPointerUtil.isArgOfFunction(statement1, invokePointUnStar, includeFileList, belongTo);
+            if (returnClass != null) {
+                returnClass.getFunctionList().get(0).updateImplicitInvoke(returnClass.getIndex(), list, this, kk);
+                break;
+            }
+        }
+    }
+
     public void processImplicitInvoke() {
         if (!isDefine) {
             for (int i = numOfStatements - 1; i >= 0; i--) {
@@ -151,7 +218,6 @@ public class CFunctionInfo {
                     invokePoints.addAll(FunctionUtil.getFunctionNameFromDeclarationStatement((IASTDeclarationStatement) statement));
                 } else if (statement instanceof IASTExpressionStatement) {
                     invokePoints.addAll(FunctionUtil.getFunctionNameFromExpressionStatement((IASTExpressionStatement) statement));
-                    FunctionUtil.getFunctionNameAndArgsFromExpressionStatement((IASTExpressionStatement) statement);
                 }
                 // 这句话的可能隐式调用点拿到了，遍历它们，再从这个位置往前寻找定义点(1)
                 // 如果找不到找全局(2)
@@ -159,8 +225,8 @@ public class CFunctionInfo {
                 // 找定义点的时候只检查本块 + 上层，本层其他块不检查
                 // 这个循环是这句话的所有invokePoint
                 for (String invokePoint : invokePoints) {
+                    // 是从第一句话找到的invokePoint，直接从全局找就行，找完break即可
                     if (i == 0) {
-                        // 大循环找到头了，就开始构建
                         CVariableInfo info = FunctionPointerUtil.isIncludeVariable(invokePoint, belongTo);
                         if (invokePoint.startsWith("*")) {
                             // (*fun)();
@@ -204,8 +270,6 @@ public class CFunctionInfo {
                                     // 然后检查新函数时把（参数序号、已赋值的函数结点）传进去
                                     // 这个函数获得的是，(赋值点语句及对应被调用函数结点)的一个List
                                     List<GetProbInvokeListReturnClass> probInvokeAllInfoList = getProbInvokeList(numedCheckDeclare, numedStatement, invokePoint);
-                                    System.out.println(invokePoint);
-                                    System.out.println(probInvokeAllInfoList);
                                     List<CFunctionInfo> probInvokeList = GetProbInvokeListReturnClass.getAllFunctions(probInvokeAllInfoList);
                                     point.setProbInvokeFunctions(probInvokeList);
                                     point.getProbInvokeFunctions().forEach(invokeFunc -> {
@@ -217,10 +281,14 @@ public class CFunctionInfo {
                                         NumedStatement infoNumedStatement = info.getNumedStatement();
                                         for (int k = infoNumedStatement.getFunSeq() + 1; k < numOfStatements; k++) {
                                             // 找到一个包含invokePoint为参数的函数调用，然后直接break
-
+                                            IASTStatement statement1 = statementList.get(k).getStatement();
+                                            IsArgOfFunctionReturnClass returnClass = FunctionPointerUtil.isArgOfFunction(statement1, invokePoint, includeFileList, belongTo);
+                                            if (returnClass != null) {
+                                                returnClass.getFunctionList().get(0).updateImplicitInvoke(returnClass.getIndex(), probInvokeList, this, k);
+                                                break;
+                                            }
                                         }
                                     }
-
                                     break;
                                 }
                             }
@@ -255,17 +323,18 @@ public class CFunctionInfo {
                             break;
                         }
                     }
-
-
-                    // 从最后挂钩点往后找第一个
-                    for (NumedStatement numedStatement1 : statementList) {
-
-                    }
                 }
             }
         }
     }
 
+    /**
+     * 把这句话作用域输入进去，并且根据定义点定义的那个variable构建has_imp和imp_invoke
+     *
+     * @param numedStatement 隐式调用所在的statement的作用域信息
+     * @param invokePoint    隐式调用点的那个标识符
+     * @param info           定义点定义的变量
+     */
     private void buildAndInvoke(NumedStatement numedStatement, String invokePoint, CVariableInfo info) {
         CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
         if (info.getEqualsInitializer() != null) {
@@ -281,6 +350,27 @@ public class CFunctionInfo {
                 }
             }
         }
+    }
+
+    /**
+     * @param numedStatement
+     * @param invokePoint
+     * @param list
+     * @param originFunction 原始调用方的函数结点
+     * @param k              原始调用方传入参数那句话是第几句话
+     * @param index          这个调用点来源于第几个参数
+     */
+    private void buildAndInvokeFromKnown(NumedStatement numedStatement, String invokePoint, List<CFunctionInfo> list,
+                                         CFunctionInfo originFunction, int k, int index) {
+        CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
+        point.setProbInvokeFunctions(list);
+        point.getProbInvokeFunctions().forEach(invokeFunc -> {
+            inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
+        });
+        Map<String, Object> fromMap = new HashMap<>();
+        fromMap.put("paramIndex", index);
+        fromMap.put("originStatementIndex", k);
+        inserter.createRelationship(point.getId(), originFunction.getId(), CExtractor.from, fromMap);
     }
 
     /**

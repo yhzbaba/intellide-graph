@@ -12,6 +12,7 @@ import org.neo4j.unsafe.batchinsert.BatchInserter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class CInvokeRelation {
     /**
@@ -23,8 +24,8 @@ public class CInvokeRelation {
                 cFunctionInfo.setIncludeFileList(cCodeFileInfo.getIncludeCodeFileList());
                 cFunctionInfo.initCallFunctionNameAndVariableNameList();
                 cFunctionInfo.initNumberedStatementList();
-                cFunctionInfo.processImplicitInvoke();
             });
+            cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::processImplicitInvoke);
             if (inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     // 对函数调用的每一个函数查询其所属信息

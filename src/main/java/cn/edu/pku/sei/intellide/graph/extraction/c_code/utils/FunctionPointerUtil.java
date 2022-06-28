@@ -1,6 +1,7 @@
 package cn.edu.pku.sei.intellide.graph.extraction.c_code.utils;
 
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.infos.*;
+import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.IsArgOfFunctionReturnClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.NumedStatement;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.PrimitiveClass;
 import cn.edu.pku.sei.intellide.graph.extraction.c_code.supportEntity.StringAndStringList;
@@ -245,5 +246,37 @@ public class FunctionPointerUtil {
     public static Boolean isSameOrUpStat(NumedStatement numedStatement, NumedStatement numedCheckDeclare) {
         return (numedStatement.isSameLayer(numedCheckDeclare) && numedStatement.getSeqNum() > numedCheckDeclare.getSeqNum())
                 || numedCheckDeclare.getLayer().size() < numedStatement.getLayer().size();
+    }
+
+    /**
+     * 从这个句子中拿到函数，检查invokePoint是否为该函数的参数，如果是，则返回这个函数结点，否则返回null
+     *
+     * @param statement   需要检查的这句话
+     * @param invokePoint 是否作为该函数的一个参数
+     * @return 检查这句话中（可能存在的那个）函数结点
+     */
+    public static IsArgOfFunctionReturnClass isArgOfFunction(IASTStatement statement,
+                                                             String invokePoint,
+                                                             List<String> includeFileList,
+                                                             String belongTo) {
+        List<StringAndStringList> tool = new ArrayList<>();
+        if (statement instanceof IASTReturnStatement) {
+            tool.addAll(FunctionUtil.getFunctionNameAndArgsFromReturnStatement((IASTReturnStatement) statement));
+        } else if (statement instanceof IASTDeclarationStatement) {
+            tool.addAll(FunctionUtil.getFunctionNameAndArgsFromDeclarationStatement((IASTDeclarationStatement) statement));
+        } else if (statement instanceof IASTExpressionStatement) {
+            tool.addAll(FunctionUtil.getFunctionNameAndArgsFromExpressionStatement((IASTExpressionStatement) statement));
+        }
+        for (StringAndStringList list : tool) {
+            for (int i = 0; i < list.getStringList().size(); i++) {
+                if (list.getStringList().get(i).equals(invokePoint)) {
+                    IsArgOfFunctionReturnClass returnClass = new IsArgOfFunctionReturnClass();
+                    returnClass.setIndex(i);
+                    returnClass.getFunctionList().addAll(getInvokeFunctions(includeFileList, belongTo, list.getName()));
+                    return returnClass;
+                }
+            }
+        }
+        return null;
     }
 }
