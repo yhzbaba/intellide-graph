@@ -3,7 +3,8 @@ graphDir: /Users/yhzbaba/Documents/Software/neo4j/neo4j-community-3.5.30/data/da
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/Code/C++/csp/src
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/kernel_liteos_a-master
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/qemu-master
-cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/redis-unstable
+#cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/redis-unstable
+cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/git-master
 
 # 命令
 # java -jar target/intellide-graph-1.2.1.jar -gen config.yml

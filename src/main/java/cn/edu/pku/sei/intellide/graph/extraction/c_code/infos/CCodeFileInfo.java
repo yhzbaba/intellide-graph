@@ -166,7 +166,9 @@ public class CCodeFileInfo {
                         if (declarator instanceof IASTFunctionDeclarator) {
                             if (declSpecifier.getRawSignature().startsWith("typedef")) {
                                 // 定义的是typedef函数指针类型
-                                PrimitiveMapUtil.insert(declarator.getName().toString(), new PrimitiveClass("", true, fileName, declSpecifier.getRawSignature().split(" ")[1]));
+                                if (declSpecifier.getRawSignature().split(" ").length > 1) {
+                                    PrimitiveMapUtil.insert(declarator.getName().toString(), new PrimitiveClass("", true, fileName, declSpecifier.getRawSignature().split(" ")[1]));
+                                }
                             }
                             // (*fun)() common_fun() (*fun)() = &PFB_2
                             if (!"".equals(declarator.getName().toString())) {

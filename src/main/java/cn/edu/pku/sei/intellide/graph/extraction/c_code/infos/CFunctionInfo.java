@@ -215,7 +215,7 @@ public class CFunctionInfo {
                 // 找到一个包含invokePoint为参数的函数调用，然后直接break
                 IASTStatement statement1 = statementList.get(kk).getStatement();
                 IsArgOfFunctionReturnClass returnClass = FunctionPointerUtil.isArgOfFunction(statement1, invokePointUnStar, includeFileList, belongTo);
-                if (returnClass != null) {
+                if (returnClass != null && returnClass.getFunctionList().size() > 0) {
                     returnClass.getFunctionList().get(0).updateImplicitInvoke(returnClass.getIndex(), list, this, kk);
                     break;
                 }
@@ -304,7 +304,7 @@ public class CFunctionInfo {
                                     for (GetProbInvokeListReturnClass info : probInvokeAllInfoList) {
                                         NumedStatement infoNumedStatement = info.getNumedStatement();
                                         for (int k = infoNumedStatement.getFunSeq() + 1; k < numOfStatements; k++) {
-                                            // 找到一个包含invokePoint为参数的函数调用，然后直接break
+                                            // 找到一个包含invokePoint为参数的函数调用，找到这个invokePoint对应的新赋值点就break
                                             IASTStatement statement1 = statementList.get(k).getStatement();
                                             IsArgOfFunctionReturnClass returnClass = FunctionPointerUtil.isArgOfFunction(statement1, invokePoint, includeFileList, belongTo);
                                             if (returnClass != null) {
