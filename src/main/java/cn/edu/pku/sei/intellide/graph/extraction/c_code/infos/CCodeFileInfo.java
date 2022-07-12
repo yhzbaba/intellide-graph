@@ -333,7 +333,8 @@ public class CCodeFileInfo {
             if (statement instanceof IASTPreprocessorIncludeStatement) {
                 IASTPreprocessorIncludeStatement includeStatement = (IASTPreprocessorIncludeStatement) statement;
                 if (!includeStatement.isSystemInclude()) {
-                    includeCodeFileList.add(fileName.substring(0, fileName.lastIndexOf('/') + 1) + includeStatement.getName().toString());
+//                    includeCodeFileList.add(fileName.substring(0, fileName.lastIndexOf('/') + 1) + includeStatement.getName().toString());
+                    includeCodeFileList.add(includeStatement.getName().toString());
                 }
             } else if (statement instanceof IASTPreprocessorMacroDefinition) {
                 // 宏定义
