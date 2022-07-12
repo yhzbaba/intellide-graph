@@ -289,16 +289,19 @@ public class CFunctionInfo {
                                 String tempDeclareResult = declareResult.startsWith("*") ? declareResult : "*" + declareResult;
                                 if (tempDeclareResult.equals(tempInvokePoint)) {
                                     // 用函数名匹配到变量定义了，那么持久化这个隐式调用点，然后直接检查下一个invokePoint
-                                    CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
+
                                     // 找到赋值点，我的目的是赋值点后面第一句（将包含invokePoint作为参数的函数）揪出来
                                     // 然后检查新函数时把（参数序号、已赋值的函数结点）传进去
                                     // 这个函数获得的是，(赋值点语句及对应被调用函数结点)的一个List
                                     List<GetProbInvokeListReturnClass> probInvokeAllInfoList = getProbInvokeList(numedCheckDeclare, numedStatement, invokePoint);
                                     List<CFunctionInfo> probInvokeList = GetProbInvokeListReturnClass.getAllFunctions(probInvokeAllInfoList);
-                                    point.setProbInvokeFunctions(probInvokeList);
-                                    point.getProbInvokeFunctions().forEach(invokeFunc -> {
-                                        inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
-                                    });
+                                    if (probInvokeList.size() > 0) {
+                                        CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
+                                        point.setProbInvokeFunctions(probInvokeList);
+                                        point.getProbInvokeFunctions().forEach(invokeFunc -> {
+                                            inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
+                                        });
+                                    }
 
                                     // 要带着已知信息去检查新函数了！
                                     for (GetProbInvokeListReturnClass info : probInvokeAllInfoList) {
@@ -364,10 +367,10 @@ public class CFunctionInfo {
      * @param info           定义点定义的变量
      */
     private void buildAndInvoke(NumedStatement numedStatement, String invokePoint, CVariableInfo info) {
-        CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
         if (info.getEqualsInitializer() != null) {
             for (IASTNode node : info.getEqualsInitializer().getChildren()) {
                 if (node instanceof IASTUnaryExpression) {
+                    CImplicitInvokePoint point = buildImpInvoke(invokePoint, numedStatement);
                     point.setProbInvokeFunctions(FunctionPointerUtil.getInvokeFunctions(
                             includeFileList,
                             belongTo,

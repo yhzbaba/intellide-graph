@@ -49,11 +49,19 @@ public class CInvokeRelation {
                             }
                         }
                     });
+                    Map<Long, Integer> funcMap = new HashMap<>();
+                    Map<Long, Integer> varMap = new HashMap<>();
                     invokeFunctions.forEach(invokeFunc -> {
-                        inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
+                        if (!funcMap.containsKey(invokeFunc.getId())) {
+                            inserter.createRelationship(cFunctionInfo.getId(), invokeFunc.getId(), CExtractor.invoke, new HashMap<>());
+                            funcMap.put(invokeFunc.getId(), 1);
+                        }
                     });
                     invokeVariables.forEach(invokeVariable -> {
-                        inserter.createRelationship(cFunctionInfo.getId(), invokeVariable.getId(), CExtractor.invoke, new HashMap<>());
+                        if (!varMap.containsKey(invokeVariable.getId())) {
+                            inserter.createRelationship(cFunctionInfo.getId(), invokeVariable.getId(), CExtractor.invoke, new HashMap<>());
+                            varMap.put(invokeVariable.getId(), 1);
+                        }
                     });
                 });
             }
