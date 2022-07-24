@@ -291,6 +291,7 @@ public class CCodeFileInfo {
                                     variableInfo.setEqualsInitializer(declarator.getInitializer());
                                 }
                             }
+                            variableInfo.setImpInvokeInfoMap(new HashMap<>());
                             variableInfo.setContent(declaration.getRawSignature());
                             variableInfo.setIsStructVariable(true);
                             if (this.inserter != null) {

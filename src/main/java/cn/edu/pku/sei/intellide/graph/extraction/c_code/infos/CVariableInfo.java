@@ -10,9 +10,7 @@ import org.eclipse.cdt.core.dom.ast.IASTInitializer;
 import org.eclipse.cdt.core.dom.ast.IASTSimpleDeclaration;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 @Data
 public class CVariableInfo {
@@ -50,6 +48,25 @@ public class CVariableInfo {
      * 包含自身所有信息
      */
     private IASTSimpleDeclaration simpleDeclaration;
+
+    /**
+     * 当这是个结构体变量才有意义
+     */
+    private Map<String, List<CFunctionInfo>> impInvokeInfoMap;
+
+    public List<CFunctionInfo> queryImpInvokeInfoMap(String fieldName) {
+        List<CFunctionInfo> res = new ArrayList<>();
+        impInvokeInfoMap.forEach((key, value) -> {
+            if (key.equals(fieldName)) {
+                res.addAll(value);
+            }
+        });
+        return res;
+    }
+
+    public void insertImpInvokeInfoMap(String fieldName, List<CFunctionInfo> invokeFunctions) {
+        impInvokeInfoMap.put(fieldName, invokeFunctions);
+    }
 
     /**
      * 函数指针若有初始化，右半部分的 = &PFB_2保存在这里
