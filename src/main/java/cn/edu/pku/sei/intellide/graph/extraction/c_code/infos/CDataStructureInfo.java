@@ -5,6 +5,8 @@ import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.ASTUtil;
 import lombok.Getter;
 import lombok.Setter;
 import org.eclipse.cdt.core.dom.ast.*;
+import org.eclipse.cdt.core.dom.ast.c.ICASTTypedefNameSpecifier;
+import org.eclipse.cdt.internal.core.dom.parser.c.CASTTypedefNameSpecifier;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
 import java.util.*;
@@ -73,12 +75,18 @@ public class CDataStructureInfo {
                                     name.append(((IASTDeclarator) node4).getName().toString());
                                 }
                             }
-                        }
-                        if (node3 instanceof IASTArrayDeclarator) {
+                        } else if (node3 instanceof IASTArrayDeclarator) {
                             isArray = true;
+                        } else {
+                            name.append(node3.getRawSignature());
+                        }
+                    } else if (node3 instanceof CASTTypedefNameSpecifier) {
+                        // 类型部分 还没有处理函数指针
+                        String tempType = node3.getRawSignature();
+                        if (ASTUtil.isHeuristicRule(tempType)) {
+                            type.append(node3.getRawSignature());
                         }
                     } else if (node3 instanceof IASTDeclSpecifier) {
-                        // 类型部分 还没有处理函数指针
                         type.append(node3.getRawSignature());
                     }
                 }
@@ -93,7 +101,7 @@ public class CDataStructureInfo {
                     type.append("[]");
                 }
                 fieldInfo.setType(type.toString());
-                if (isPointer) {
+                if (isPointer || ASTUtil.isHeuristicRule(name.toString())) {
                     if (this.inserter != null) {
                         fieldInfo.createNode(inserter);
                     }

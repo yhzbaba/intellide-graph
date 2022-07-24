@@ -1,7 +1,7 @@
 graphDir: /Users/yhzbaba/Documents/Software/neo4j/neo4j-community-3.5.30/data/databases/graph.db
 
-#cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/Code/C++/csp/src
-cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/kernel_liteos_a-master
+cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/Code/C++/csp/src
+#cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/kernel_liteos_a-master
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/qemu-master
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/redis-unstable
 #cn.edu.pku.sei.intellide.graph.extraction.c_code.CExtractor: /Users/yhzbaba/Documents/phd/ungraduate/git-master

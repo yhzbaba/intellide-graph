@@ -4,6 +4,9 @@ import org.eclipse.cdt.core.dom.ast.*;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPASTCompositeTypeSpecifier;
 import org.eclipse.cdt.core.dom.ast.cpp.ICPPMethod;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class ASTUtil {
     public static String getClassStructName(IASTSimpleDeclaration simpleDeclaration) {
         IASTDeclSpecifier declSpecifier = simpleDeclaration.getDeclSpecifier();
@@ -20,10 +23,26 @@ public class ASTUtil {
         return false;
     }
 
+    public static List<String> getHeuristicPrefix() {
+        List<String> result = new ArrayList<>();
+        result.add("pfn_");
+        return result;
+    }
+
+    public static boolean isHeuristicRule(String type) {
+        for (String s : getHeuristicPrefix()) {
+            if (type.startsWith(s)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static boolean hasPointerType(final IASTDeclarator declarator) {
         if (declarator == null) {
             return false;
         }
+
 
         if (declarator instanceof IASTArrayDeclarator) {
             final IASTArrayDeclarator arrayDecl = (IASTArrayDeclarator) declarator;
