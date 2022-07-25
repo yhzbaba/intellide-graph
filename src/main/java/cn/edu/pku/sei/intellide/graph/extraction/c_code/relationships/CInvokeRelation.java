@@ -24,8 +24,12 @@ public class CInvokeRelation {
                 cFunctionInfo.setIncludeFileList(cCodeFileInfo.getIncludeCodeFileList());
                 cFunctionInfo.initCallFunctionNameAndVariableNameList();
                 cFunctionInfo.initNumberedStatementList();
+                cFunctionInfo.recordTableImpInvoke();
             });
-            cCodeFileInfo.getFunctionInfoList().forEach(CFunctionInfo::processImplicitInvoke);
+            cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
+                cFunctionInfo.processImplicitInvoke();
+                cFunctionInfo.handleTableImpInvoke();
+            });
             if (inserter != null) {
                 cCodeFileInfo.getFunctionInfoList().forEach(cFunctionInfo -> {
                     // 对函数调用的每一个函数查询其所属信息

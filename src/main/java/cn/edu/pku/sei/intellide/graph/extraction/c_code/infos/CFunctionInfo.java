@@ -11,6 +11,7 @@ import cn.edu.pku.sei.intellide.graph.extraction.c_code.utils.VariableUtil;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
+import nu.xom.jaxen.FunctionCallException;
 import org.eclipse.cdt.core.dom.ast.*;
 import org.neo4j.unsafe.batchinsert.BatchInserter;
 
@@ -119,6 +120,79 @@ public class CFunctionInfo {
             statementList.addAll(FunctionUtil.getStatementsFromCompound(compoundStatement, startLayer));
             numOfStatements = statementList.size();
             FunctionUtil.giveFunctionSeq(statementList);
+        }
+    }
+
+    /**
+     * 检查函数里面的赋值语句里面有没有形如
+     * g_stServiceSchemeAPI.pfn_AAA_CmdReg_SetSrcRoute = AAA_CmdReg_SetSrcRoute;
+     * 的语句
+     */
+    public void recordTableImpInvoke() {
+        if (!isDefine) {
+            for (NumedStatement numedStatement : statementList) {
+                IASTStatement statement = numedStatement.getStatement();
+                if (statement instanceof IASTExpressionStatement) {
+                    IASTExpression expression = ((IASTExpressionStatement) statement).getExpression();
+                    if (expression instanceof IASTBinaryExpression) {
+                        IASTBinaryExpression binaryExpression = (IASTBinaryExpression) expression;
+                        if (binaryExpression.getOperator() == 17) {
+                            IASTExpression operand1 = binaryExpression.getOperand1();
+                            if (operand1 instanceof IASTFieldReference) {
+                                String fieldOwner = ((IASTFieldReference) operand1).getFieldOwner().getRawSignature();
+                                String fieldName = ((IASTFieldReference) operand1).getFieldName().toString();
+                                List<CVariableInfo> cVariableInfos = VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(fieldOwner)];
+                                if (cVariableInfos.size() > 0) {
+                                    CVariableInfo info = cVariableInfos.get(0);
+                                    List<CFunctionInfo> tempList =
+                                            FunctionUtil.FUNCTION_HASH_LIST[FunctionUtil.hashFunc(binaryExpression.getOperand2().getRawSignature())];
+                                    info.insertImpInvokeInfoMap(fieldName, tempList);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 找调用了要
+     */
+    public void handleTableImpInvoke() {
+        if (!isDefine) {
+            for (NumedStatement numedStatement : statementList) {
+                IASTStatement statement = numedStatement.getStatement();
+                if (statement instanceof IASTExpressionStatement) {
+                    IASTExpression expression = ((IASTExpressionStatement) statement).getExpression();
+                    tableImpInvokeFromFunctionCallExpression(numedStatement, expression);
+                } else if (statement instanceof IASTReturnStatement) {
+                    IASTExpression returnValue = ((IASTReturnStatement) statement).getReturnValue();
+                    tableImpInvokeFromFunctionCallExpression(numedStatement, returnValue);
+                }
+            }
+        }
+    }
+
+    private void tableImpInvokeFromFunctionCallExpression(NumedStatement numedStatement, IASTExpression returnValue) {
+        if (returnValue instanceof IASTFunctionCallExpression) {
+            IASTExpression functionNameExpression = ((IASTFunctionCallExpression) returnValue).getFunctionNameExpression();
+            if (functionNameExpression instanceof IASTFieldReference) {
+                String fieldOwner = ((IASTFieldReference) functionNameExpression).getFieldOwner().getRawSignature();
+                String fieldName = ((IASTFieldReference) functionNameExpression).getFieldName().toString();
+                List<CVariableInfo> cVariableInfos = VariableUtil.VARIABLE_HASH_LIST[VariableUtil.hashVariable(fieldOwner)];
+                if (cVariableInfos.size() > 0) {
+                    CVariableInfo info = cVariableInfos.get(0);
+                    List<CFunctionInfo> cFunctionInfos = info.queryImpInvokeInfoMap(fieldName);
+                    if (cFunctionInfos.size() > 0) {
+                        CImplicitInvokePoint point = buildImpInvoke(fieldName, numedStatement);
+                        point.setProbInvokeFunctions(cFunctionInfos);
+                        point.getProbInvokeFunctions().forEach(invokeFunc -> {
+                            inserter.createRelationship(point.getId(), invokeFunc.getId(), CExtractor.imp_invoke, new HashMap<>());
+                        });
+                    }
+                }
+            }
         }
     }
 
