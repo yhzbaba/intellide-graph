@@ -56,16 +56,20 @@ public class CVariableInfo {
 
     public List<CFunctionInfo> queryImpInvokeInfoMap(String fieldName) {
         List<CFunctionInfo> res = new ArrayList<>();
-        impInvokeInfoMap.forEach((key, value) -> {
-            if (key.equals(fieldName)) {
-                res.addAll(value);
-            }
-        });
+        if (isStructVariable && impInvokeInfoMap != null) {
+            impInvokeInfoMap.forEach((key, value) -> {
+                if (key.equals(fieldName)) {
+                    res.addAll(value);
+                }
+            });
+        }
         return res;
     }
 
     public void insertImpInvokeInfoMap(String fieldName, List<CFunctionInfo> invokeFunctions) {
-        impInvokeInfoMap.put(fieldName, invokeFunctions);
+        if (isStructVariable && impInvokeInfoMap != null) {
+            impInvokeInfoMap.put(fieldName, invokeFunctions);
+        }
     }
 
     /**
